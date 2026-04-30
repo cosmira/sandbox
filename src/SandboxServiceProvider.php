@@ -9,6 +9,7 @@ use Packages\Sandbox\Commands\CloseSandboxCommand;
 use Packages\Sandbox\Commands\OpenSandboxCommand;
 use Packages\Sandbox\Commands\StatusSandboxCommand;
 use Packages\Sandbox\Contracts\SandboxSyncRunnerInterface;
+use function class_exists;
 
 class SandboxServiceProvider extends ServiceProvider
 {
@@ -49,11 +50,18 @@ class SandboxServiceProvider extends ServiceProvider
 
         if ($this->app->runningInConsole()) {
             // Регистрировать команды
-            $this->commands([
+            $commands = [
                 OpenSandboxCommand::class,
                 CloseSandboxCommand::class,
                 StatusSandboxCommand::class,
-            ]);
+            ];
+
+            // Добавить benchmark команду только если доступен dev пакет
+            if (class_exists('DragonCode\Benchmark\Benchmark')) {
+                $commands[] = \Packages\Sandbox\Commands\BenchmarkSyncCommand::class;
+            }
+
+            $this->commands($commands);
 
             $this->publishes([
                 __DIR__.'/../config/sandbox.php' => config_path('sandbox.php'),

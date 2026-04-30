@@ -10,8 +10,10 @@
     "license": "MIT",
     "authors": [
         {
-            "name": "IWTM",
-            "email": "dev@example.com"
+            "name": "Alexandr Chernyaev",
+            "email": "bliz48rus@gmail.com",
+            "homepage": "https://tabuna.github.io",
+            "role": "Developer"
         }
     ],
     "require": {
@@ -21,6 +23,7 @@
         "illuminate/support": "^12.0"
     },
     "require-dev": {
+        "dragon-code/benchmark": "^4.5",
         "infection/infection": "^0.32.4",
         "laravel/pint": "^1.27",
         "orchestra/testbench": "^10.0",
