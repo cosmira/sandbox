@@ -1,0 +1,97 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Packages\Sandbox\Tests\Unit;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Packages\Sandbox\HasSandbox;
+use Packages\Sandbox\Tests\TestCase;
+
+final class HasSandboxCompositeKeyTest extends TestCase
+{
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->createTestTables();
+        PivotModelStub::setCompositeKey();
+    }
+
+    private function createTestTables(): void
+    {
+        Schema::dropIfExists('test_pivot_sb');
+        Schema::dropIfExists('test_pivot');
+        Schema::create('test_pivot', function ($table): void {
+            $table->string('a', 10);
+            $table->string('b', 10);
+            $table->string('value', 50)->nullable();
+            $table->primary(['a', 'b']);
+        });
+        Schema::create('test_pivot_sb', function ($table): void {
+            $table->string('a', 10);
+            $table->string('b', 10);
+            $table->string('value', 50)->nullable();
+            $table->primary(['a', 'b']);
+        });
+    }
+
+    #[\PHPUnit\Framework\Attributes\Test]
+    public function syncIntoSandboxWithCompositeKeyCopiesRows(): void
+    {
+        DB::table('test_pivot')->insert(['a' => 'x', 'b' => 'y', 'value' => 'v1']);
+        DB::table('test_pivot')->insert(['a' => 'p', 'b' => 'q', 'value' => 'v2']);
+
+        PivotModelStub::syncIntoSandbox();
+
+        $this->assertSame(2, DB::table('test_pivot_sb')->count());
+        $this->assertSame('v1', DB::table('test_pivot_sb')->where(['a' => 'x', 'b' => 'y'])->value('value'));
+        $this->assertSame('v2', DB::table('test_pivot_sb')->where(['a' => 'p', 'b' => 'q'])->value('value'));
+    }
+
+    #[\PHPUnit\Framework\Attributes\Test]
+    public function syncIntoSandboxWithCompositeKeyRemovesOrphans(): void
+    {
+        DB::table('test_pivot')->insert(['a' => 'x', 'b' => 'y', 'value' => 'v1']);
+        DB::table('test_pivot_sb')->insert(['a' => 'orphan', 'b' => 'sb', 'value' => 'old']);
+
+        PivotModelStub::syncIntoSandbox();
+
+        $this->assertSame(1, DB::table('test_pivot_sb')->count());
+        $this->assertNotInstanceOf(\stdClass::class, DB::table('test_pivot_sb')->where(['a' => 'orphan', 'b' => 'sb'])->first());
+    }
+
+    #[\PHPUnit\Framework\Attributes\Test]
+    public function syncIntoActiveWithCompositeKeyCopiesRows(): void
+    {
+        DB::table('test_pivot_sb')->insert(['a' => 'x', 'b' => 'y', 'value' => 'from_sb']);
+
+        PivotModelStub::syncIntoActive();
+
+        $this->assertSame(1, DB::table('test_pivot')->count());
+        $this->assertSame('from_sb', DB::table('test_pivot')->where(['a' => 'x', 'b' => 'y'])->value('value'));
+    }
+
+    #[\PHPUnit\Framework\Attributes\Test]
+    public function getSandboxPrimaryKeyReturnsArrayForCompositeKey(): void
+    {
+        $model = new PivotModelStub();
+        $key = $model->getSandboxPrimaryKey();
+        $this->assertIsArray($key);
+        $this->assertSame(['a', 'b'], $key);
+    }
+}
+
+class PivotModelStub extends Model
+{
+    use HasSandbox;
+
+    protected $table = 'test_pivot';
+
+    public static function setCompositeKey(): void
+    {
+        self::$sandboxPrimaryKey = ['a', 'b'];
+        self::$sandboxTrackChangeColumn = null;
+    }
+}

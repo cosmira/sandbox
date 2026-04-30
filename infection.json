@@ -1,0 +1,31 @@
+{
+    "$schema": "https://raw.githubusercontent.com/infection/infection/master/resources/schema.json",
+    "source": {
+        "directories": [
+            "src"
+        ],
+        "excludes": [
+            "Testing/SandboxTestHelpers.php"
+        ]
+    },
+    "timeout": 10,
+    "logs": {
+        "text": "infection.log",
+        "summary": "infection-summary.log",
+        "json": "infection-results.json",
+        "perMutator": "infection-per-mutator.log"
+    },
+    "mutators": {
+        "@default": true,
+        "CastBool": false,
+        "TrueValue": false,
+        "ProtectedVisibility": false
+    },
+    "testFramework": "phpunit",
+    "testFrameworkOptions": "--order-by=random --exclude-group=commands",
+    "phpUnit": {
+        "configDir": "."
+    },
+    "minMsi": 70,
+    "minCoveredMsi": 75
+}

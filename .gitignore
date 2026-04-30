@@ -1,0 +1,11 @@
+/vendor/
+/.idea/
+/.vscode/
+composer.lock
+.phpunit.result.cache
+clover.xml
+coverage/
+infection.log
+infection-summary.log
+infection-results.json
+infection-per-mutator.log
