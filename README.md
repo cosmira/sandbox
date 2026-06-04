@@ -186,27 +186,6 @@ Category::syncIntoActive();  // sandbox -> active
 Sandbox::for($userId)->reset($category);
 ```
 
-## Artisan
-
-```bash
-php artisan sandbox:open 1 --note="Editing config"
-php artisan sandbox:open 2 --force
-
-php artisan sandbox:close 1 --result=1
-php artisan sandbox:close 1 --result=0
-php artisan sandbox:close 1 --result=2
-php artisan sandbox:close 1 --result=1 --async
-
-php artisan sandbox:status
-php artisan sandbox:status --details
-```
-
-Значения `--result`:
-
-- `0`: откат
-- `1`: коммит
-- `2`: сохранить без коммита
-
 ## Тестирование
 
 В тестах используйте `SandboxTestHelpers`:
