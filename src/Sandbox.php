@@ -16,6 +16,7 @@ use Packages\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
 use Packages\Sandbox\Events\MergeIntoActiveRequested;
 use Packages\Sandbox\Events\MergeIntoSandboxRequested;
 use Packages\Sandbox\Events\SandboxCommitted;
+use Packages\Sandbox\Events\SandboxOpened;
 use Packages\Sandbox\Exceptions\SandboxException;
 use Packages\Sandbox\Models\SandboxStatus;
 
@@ -36,27 +37,29 @@ class Sandbox
     /**
      * Открыть sandbox (начать редактирование).
      *
-     * @param int|string $userId ID или UUID пользователя
+     * @param int|string $user ID или UUID пользователя
      *
      * @throws SandboxException Если sandbox заблокирован другим пользователем
      */
-    public function open(int|string $userId, bool $force = false, ?string $note = null): void
+    public function open(int|string|Model $user, bool $force = false, ?string $note = null): void
     {
-        Log::debug('Opening sandbox', ['user_id' => $userId]);
+        Log::debug('Opening sandbox', ['user_id' => $user]);
+
+        $userId = $user instanceof Model ? $user->getKey() : $user;
 
         DB::transaction(function () use ($userId, $force, $note): void {
             $status = SandboxStatus::first();
 
             throw_unless($status, \RuntimeException::class, 'Sandbox status not found');
 
-            if (! $force && $status->isLocked() && $status->user_id !== $userId) {
+            if (! $force && $status->isLocked() && (string) $status->user_id !== (string) $userId) {
                 throw new SandboxException(
                     'Sandbox is locked by other user '.$status->user_id,
                     SandboxException::CODE_SANDBOX_LOCKED,
                 );
             }
 
-            if ($status->isFree() || ($force && $status->isLocked() && $status->user_id !== $userId)) {
+            if ($status->isFree() || ($force && $status->isLocked() && (string) $status->user_id !== (string) $userId)) {
                 Event::dispatch(new MergeIntoSandboxRequested());
             }
 
@@ -66,6 +69,8 @@ class Sandbox
                 'note'        => $note,
                 'change_date' => now(),
             ]);
+
+            Event::dispatch(new SandboxOpened($userId, $force, $note));
 
             Log::info('Sandbox opened', ['user_id' => $userId]);
         });
@@ -211,9 +216,9 @@ class Sandbox
         $this->ensureModelCanSync($modelOrClass);
 
         $instance = $modelOrClass instanceof Model ? $modelOrClass : null;
-        $modelClass = $instance instanceof \Illuminate\Database\Eloquent\Model ? $instance::class : $modelOrClass;
+        $modelClass = $instance instanceof Model ? $instance::class : $modelOrClass;
 
-        if ($instance instanceof \Illuminate\Database\Eloquent\Model) {
+        if ($instance instanceof Model) {
             $this->resetSingleRecord($instance);
         } else {
             $this->resetBulk($modelClass);
@@ -238,12 +243,22 @@ class Sandbox
     private function ensureModelCanSync(string|Model $modelOrClass): void
     {
         $modelClass = $modelOrClass instanceof Model ? $modelOrClass::class : $modelOrClass;
-        throw_unless(method_exists($modelClass, 'syncIntoSandbox'), SandboxException::class, sprintf('Model %s has no syncIntoSandbox(). Use HasSandbox trait.', $modelClass), SandboxException::CODE_MODEL_NOT_REGISTERED);
+
+        throw_unless(
+            method_exists($modelClass, 'syncIntoSandbox'),
+            SandboxException::class,
+            sprintf('Model %s has no syncIntoSandbox(). Use HasSandbox trait.', $modelClass), SandboxException::CODE_MODEL_NOT_REGISTERED
+        );
     }
 
     private function resetSingleRecord(Model $model): void
     {
-        throw_unless(method_exists($model, 'getSandboxTable'), SandboxException::class, 'Model '.$model::class.' must use HasSandbox trait for single-record reset.', SandboxException::CODE_MODEL_NOT_REGISTERED);
+        throw_unless(
+            method_exists($model, 'getSandboxTable'),
+            SandboxException::class,
+            'Model '.$model::class.' must use HasSandbox trait for single-record reset.',
+            SandboxException::CODE_MODEL_NOT_REGISTERED,
+        );
 
         $table = $model->getActiveTable();
         $sandboxTable = $model->getSandboxTable();
@@ -258,6 +273,7 @@ class Sandbox
         }
 
         $row = DB::table($table)->where($keyValues)->first();
+
         if ($row === null) {
             DB::table($sandboxTable)->where($keyValues)->delete();
 

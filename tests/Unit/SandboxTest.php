@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace Packages\Sandbox\Tests\Unit;
 
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Packages\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
 use Packages\Sandbox\Events\MergeIntoActiveRequested;
 use Packages\Sandbox\Events\MergeIntoSandboxRequested;
 use Packages\Sandbox\Events\SandboxCommitted;
+use Packages\Sandbox\Events\SandboxOpened;
 use Packages\Sandbox\Exceptions\SandboxException;
 use Packages\Sandbox\Models\SandboxStatus;
 use Packages\Sandbox\Sandbox;
 use Packages\Sandbox\Tests\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 
 final class SandboxTest extends TestCase
 {
@@ -42,10 +45,10 @@ final class SandboxTest extends TestCase
         ]);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function itCanOpenWhenSandboxIsFree(): void
     {
-        Event::fake([MergeIntoSandboxRequested::class]);
+        Event::fake([MergeIntoSandboxRequested::class, SandboxOpened::class]);
 
         $this->createDatabaseUser(1);
         SandboxStatus::factory()->create([
@@ -56,12 +59,17 @@ final class SandboxTest extends TestCase
         $this->sandbox->open(1);
 
         Event::assertDispatched(MergeIntoSandboxRequested::class);
+        Event::assertDispatched(SandboxOpened::class, function (SandboxOpened $event) {
+            return $event->userId === 1
+                && $event->force === false
+                && $event->note === null;
+        });
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Locked, $status->status);
         $this->assertEquals(1, $status->user_id);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function itThrowsExceptionWhenSandboxIsLockedByAnotherUser(): void
     {
         Event::fake();
@@ -78,10 +86,10 @@ final class SandboxTest extends TestCase
         $this->sandbox->open(1);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function itCanForceOpenWhenLockedByAnotherUser(): void
     {
-        Event::fake([MergeIntoSandboxRequested::class]);
+        Event::fake([MergeIntoSandboxRequested::class, SandboxOpened::class]);
 
         $this->createDatabaseUser(1);
         $this->createDatabaseUser(2);
@@ -90,15 +98,20 @@ final class SandboxTest extends TestCase
             'user_id' => 2,
         ]);
 
-        $this->sandbox->open(1, force: true);
+        $this->sandbox->open(1, force: true, note: 'Forced open');
 
         Event::assertDispatched(MergeIntoSandboxRequested::class);
+        Event::assertDispatched(SandboxOpened::class, function (SandboxOpened $event) {
+            return $event->userId === 1
+                && $event->force === true
+                && $event->note === 'Forced open';
+        });
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Locked, $status->status);
         $this->assertEquals(1, $status->user_id);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function itCanRollbackChanges(): void
     {
         Event::fake([MergeIntoSandboxRequested::class]);
@@ -117,7 +130,7 @@ final class SandboxTest extends TestCase
         $this->assertEquals(0, $status->last_operation);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function itCanCommitChanges(): void
     {
         Event::fake([MergeIntoActiveRequested::class, SandboxCommitted::class]);
@@ -137,10 +150,10 @@ final class SandboxTest extends TestCase
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Free, $status->status);
         $this->assertEquals(1, $status->last_operation);
-        $this->assertInstanceOf(\Carbon\Carbon::class, $status->send_date);
+        $this->assertInstanceOf(Carbon::class, $status->send_date);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function itCanSaveChangesWithoutCommit(): void
     {
         Event::fake([MergeIntoActiveRequested::class, SandboxCommitted::class]);
@@ -160,7 +173,7 @@ final class SandboxTest extends TestCase
         $this->assertEquals(2, $status->last_operation);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function itThrowsExceptionWhenClosingFreeSandbox(): void
     {
         SandboxStatus::factory()->create([
@@ -173,7 +186,7 @@ final class SandboxTest extends TestCase
         $this->sandbox->close(1, result: 1);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function itReturnsSandboxStatus(): void
     {
         $this->createDatabaseUser(5);
@@ -184,12 +197,12 @@ final class SandboxTest extends TestCase
 
         $status = $this->sandbox->status();
 
-        $this->assertInstanceOf(\Packages\Sandbox\Models\SandboxStatus::class, $status);
+        $this->assertInstanceOf(SandboxStatus::class, $status);
         $this->assertEquals(SandboxStatusEnum::Locked, $status->status);
         $this->assertEquals(5, $status->user_id);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function itChecksIfUserIsSandboxOwner(): void
     {
         $this->createDatabaseUser(1);
@@ -200,12 +213,12 @@ final class SandboxTest extends TestCase
         ]);
 
         $status = $this->sandbox->status();
-        $this->assertInstanceOf(\Packages\Sandbox\Models\SandboxStatus::class, $status);
+        $this->assertInstanceOf(SandboxStatus::class, $status);
         $this->assertTrue($status->isOwnedBy(1));
         $this->assertFalse($status->isOwnedBy(2));
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function itAcceptsUuidAsUserId(): void
     {
         Event::fake([MergeIntoSandboxRequested::class]);
@@ -219,7 +232,7 @@ final class SandboxTest extends TestCase
         $this->sandbox->open($uuid, note: 'test');
 
         $status = $this->sandbox->status();
-        $this->assertInstanceOf(\Packages\Sandbox\Models\SandboxStatus::class, $status);
+        $this->assertInstanceOf(SandboxStatus::class, $status);
         $this->assertEquals(SandboxStatusEnum::Locked, $status->status);
         $this->assertSame($uuid, $status->user_id);
         $this->assertTrue($status->isOwnedBy($uuid));

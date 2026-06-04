@@ -1,0 +1,70 @@
+name: Code Coverage
+
+on:
+  pull_request:
+  push:
+    paths:
+      - '.github/workflows/**'
+      - '**.php'
+      - 'phpunit.xml'
+      - 'composer.json'
+      - 'composer.lock'
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup PHP 🔧
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.4
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, imagick
+          coverage: pcov
+          tools: composer:v2
+
+      - name: Install Dependencies 🔧
+        run: composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
+
+      - name: Execute tests (Unit and Feature tests) via PHPUnit 🧪
+        run: vendor/bin/phpunit --coverage-html build/coverage/html
+
+      - name: Run mutation tests 🧬
+        run: |
+          mkdir -p build/infection
+          vendor/bin/infection \
+            --threads=max \
+            --logger-github=true \
+            --logger-html=build/infection/index.html \
+            --logger-summary-json=build/infection/summary.json \
+            --logger-text=build/infection/infection.log
+
+      - name: Publish code coverage report 🔭
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: code-coverage-html
+          path: build/coverage/html
+          if-no-files-found: error
+
+      - name: Publish mutation testing report 🔭
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mutation-testing-report
+          path: build/infection
+          if-no-files-found: error
+
+      - name: Add reports to job summary
+        if: always()
+        run: |
+          {
+            echo "## Test reports"
+            echo
+            echo "- Code coverage HTML report: download the \`code-coverage-html\` artifact from this workflow run."
+            echo "- Mutation testing HTML report: download the \`mutation-testing-report\` artifact and open \`index.html\`."
+          } >> "$GITHUB_STEP_SUMMARY"

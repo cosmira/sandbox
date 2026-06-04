@@ -81,29 +81,8 @@ $sandbox->apply($category);              // одна запись
 
 ```
 
-После этого ваши модели должны читать и писать в sandbox-таблицы. 
-Переключение делается в приложении.
-
-**Вариант 1 — middleware:** если в текущем запросе песочница открыта и принадлежит пользователю, включить для нужных моделей использование sandbox-таблицы:
-
-```php
-// app/Http/Middleware/UseSandboxTables.php
-public function handle(Request $request, Closure $next): Response
-{
-    $sandbox = app(\Packages\Sandbox\Sandbox::class);
-    $status = $sandbox->status();
-    if ($status && $status->isLocked() && $status->isOwnedBy($request->user()?->id)) {
-        Category::useSandboxTable();
-        Term::useSandboxTable();
-        // … остальные модели с HasSandbox
-    }
-    return $next($request);
-}
-```
-
-Назначьте middleware на маршруты/группу, где идёт редактирование конфигурации.
-
-**Вариант 2 — без middleware:** перед блоками кода, которые работают с конфигом, вызывайте `Model::useSandboxTable()` и по завершении при необходимости `Model::useActiveTable()`. Либо используйте scope: `Category::sandbox()->get()` / `Category::active()->get()` вместо переключения глобального флага.
+После этого ваши модели должны читать и писать в sandbox-таблицы.
+Переключение делается в приложении: перед блоками кода, которые работают с конфигом, вызывайте `Model::useSandboxTable()` и по завершении при необходимости `Model::useActiveTable()`. Либо используйте scope: `Category::sandbox()->get()` / `Category::active()->get()` вместо переключения глобального флага.
 
 ### Освободите песочницу (закройте сессию)
 
@@ -345,64 +324,6 @@ php artisan sandbox:close     # Закрывает текущего пользо
 # Проверить статус
 php artisan sandbox:status
 php artisan sandbox:status --details           # Детальная информация (включает enum name)
-```
-
-### Middleware для автоматического переключения таблиц
-
-Используйте middleware для автоматического переключения моделей на sandbox-таблицы:
-
-```php
-// Создайте custom middleware в приложении
-namespace App\Http\Middleware;
-
-use Packages\Sandbox\Http\Middleware\UseSandboxMiddleware;
-
-class SandboxMiddleware extends UseSandboxMiddleware
-{
-    public function __construct()
-    {
-        parent::__construct([
-            Category::class,
-            Product::class,
-            Term::class,
-            // … остальные модели с HasSandbox
-        ]);
-    }
-}
-```
-
-Регистрируйте в routes:
-
-```php
-// bootstrap/app.php
-->withRouting(
-    web: __DIR__.'/../routes/web.php',
-    commands: __DIR__.'/../routes/console.php',
-    health: '/up',
-    then: function () {
-        Route::group(['middleware' => [SandboxMiddleware::class]], function () {
-            Route::post('/config/save', ConfigController::class . '@save');
-            Route::patch('/config/{id}', ConfigController::class . '@update');
-        });
-    }
-)
-```
-
-Или используйте встроенный middleware с конфигом:
-
-```php
-// config/sandbox.php
-'auto_middleware' => env('SANDBOX_AUTO_MIDDLEWARE', false),
-
-// .env
-SANDBOX_AUTO_MIDDLEWARE=true
-
-// bootstrap/app.php
-->withMiddleware(function (Middleware $middleware) {
-    if (config('sandbox.auto_middleware')) {
-        $middleware->alias('sandbox', \Packages\Sandbox\Http\Middleware\UseSandboxMiddleware::class);
-    }
-})
 ```
 
 ### Testing Helpers

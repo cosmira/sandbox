@@ -11,10 +11,14 @@
          xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.0/phpunit.xsd">
     <coverage>
         <report>
-            <clover outputFile="clover.xml"/>
             <html outputDirectory="coverage"/>
         </report>
     </coverage>
+    <source>
+        <include>
+            <directory suffix=".php">./src</directory>
+        </include>
+    </source>
     <testsuites>
         <testsuite name="Main">
             <directory suffix="Test.php">./tests</directory>

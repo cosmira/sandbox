@@ -1,0 +1,48 @@
+name: Coding Guidelines
+
+on:
+  pull_request:
+  push:
+    paths:
+      - '.github/workflows/**'
+      - 'phpunit.xml'
+      - 'composer.json'
+      - 'composer.lock'
+      - '.prettierrc'
+      - '.prettierignore'
+      - '**.php'
+      - '**.js'
+      - '**.scss'
+      - '**.json'
+      - '**.md'
+      - '**.yaml'
+      - '**.yml'
+
+jobs:
+  php-cs-fixer:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup PHP 🔧
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.4
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, imagick
+          coverage: none
+          tools: composer:v2
+        env:
+          COMPOSER_TOKEN: ${{ secrets.TOKEN }}
+
+      - name: Install Dependencies 🔧
+        run: composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
+
+      - name: Run Pint
+        run: vendor/bin/pint
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: Fixed code style
