@@ -28,6 +28,9 @@ jobs:
             testbench: 10.*
           - laravel: 13.*
             testbench: 11.*
+        exclude:
+          - laravel: 13.*
+            php: 8.2
 
     name: P${{ matrix.php }} - ${{ matrix.os }} - L${{ matrix.laravel }} - ${{ matrix.dependency-version }}
 
@@ -56,35 +59,3 @@ jobs:
 
       - name: Execute tests (Unit and Feature tests) via PHPUnit 🧪
         run: vendor/bin/phpunit  --no-coverage --disable-coverage-ignore --order-by=random
-
-  dusk:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 1
-
-      - name: Setup PHP 🔧
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: 8.4
-          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, imagick
-          coverage: none
-          tools: composer:v2
-
-      - uses: actions/checkout@v6
-
-      - name: Install Dependencies
-        run: composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
-
-      - name: Make SQLite database
-        run: vendor/bin/testbench-dusk workbench:create-sqlite-db
-
-      - name: Update Dusk Chromedriver
-        run: vendor/bin/dusk-updater detect --auto-update
-
-      - name: Execute Unit Tests
-        run: vendor/bin/phpunit --testsuite=Browser --no-coverage --order-by=random
-        env:
-          CI: true

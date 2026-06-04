@@ -22,7 +22,8 @@
         "ProtectedVisibility": false
     },
     "testFramework": "phpunit",
-    "testFrameworkOptions": "--order-by=random --exclude-group=commands",
+    "testFrameworkOptions": "--order-by=default --exclude-group=commands",
+    "initialTestsPhpOptions": "-d pcov.directory=.",
     "phpUnit": {
         "configDir": "."
     },

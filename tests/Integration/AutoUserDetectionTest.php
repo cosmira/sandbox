@@ -6,10 +6,11 @@ namespace Packages\Sandbox\Tests\Integration;
 
 use Packages\Sandbox\Facades\Sandbox;
 use Packages\Sandbox\Tests\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 
 class AutoUserDetectionTest extends TestCase
 {
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canUseMeMethodWithAuthenticatedUser(): void
     {
         $this->actingAs($user = $this->createUser(id: 42));
@@ -19,7 +20,7 @@ class AutoUserDetectionTest extends TestCase
         $this->assertSandboxFree();
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function meMacroThrowsWithoutAuthenticatedUser(): void
     {
         $this->expectException(\RuntimeException::class);
@@ -28,7 +29,7 @@ class AutoUserDetectionTest extends TestCase
         Sandbox::me();
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function fluentApiWorksWithMeMethod(): void
     {
         $this->actingAs($user = $this->createUser(id: 99));
@@ -43,7 +44,7 @@ class AutoUserDetectionTest extends TestCase
         $this->assertSandboxFree();
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function openCommandAutodetectsCurrentUser(): void
     {
         $this->actingAs($user = $this->createUser(id: 123));
@@ -57,7 +58,7 @@ class AutoUserDetectionTest extends TestCase
         $this->assertEquals(123, $status->user_id);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function openCommandWithExplicitUserIgnoresAuth(): void
     {
         $this->actingAs($this->createUser(id: 1));
@@ -70,7 +71,7 @@ class AutoUserDetectionTest extends TestCase
         $this->assertEquals(456, $status->user_id);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function openCommandFailsWithoutAuthAndNoUserId(): void
     {
         $this->artisan('sandbox:open')
@@ -78,7 +79,7 @@ class AutoUserDetectionTest extends TestCase
             ->expectsOutput('No user specified and no authenticated user found');
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function closeCommandAutodetectsCurrentUser(): void
     {
         $this->actingAs($user = $this->createUser(id: 789));
@@ -92,7 +93,7 @@ class AutoUserDetectionTest extends TestCase
         $this->assertSandboxFree();
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function closeCommandWithExplicitUserIgnoresAuth(): void
     {
         $this->actingAs($this->createUser(id: 1));
@@ -105,7 +106,7 @@ class AutoUserDetectionTest extends TestCase
         $this->assertSandboxFree();
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function testHelpersWorkWithoutUserIdParameter(): void
     {
         $this->actingAs($user = $this->createUser(id: 555));
@@ -117,7 +118,7 @@ class AutoUserDetectionTest extends TestCase
         $this->assertSandboxFree();
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function testHelpersThrowWithoutAuthAndNoUserId(): void
     {
         $this->expectException(\RuntimeException::class);
@@ -126,7 +127,7 @@ class AutoUserDetectionTest extends TestCase
         $this->openSandbox();
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function allTestHelpersHaveSingleUserVariant(): void
     {
         $this->actingAs($user = $this->createUser(id: 777));
@@ -149,7 +150,7 @@ class AutoUserDetectionTest extends TestCase
         $this->commitSandbox();
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function meMethodPreservesFluentApiChaining(): void
     {
         $this->actingAs($user = $this->createUser(id: 888));

@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Packages\Sandbox\HasSandbox;
 use Packages\Sandbox\Tests\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 
 final class HasSandboxCompositeKeyTest extends TestCase
 {
@@ -37,7 +38,7 @@ final class HasSandboxCompositeKeyTest extends TestCase
         });
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function syncIntoSandboxWithCompositeKeyCopiesRows(): void
     {
         DB::table('test_pivot')->insert(['a' => 'x', 'b' => 'y', 'value' => 'v1']);
@@ -50,7 +51,7 @@ final class HasSandboxCompositeKeyTest extends TestCase
         $this->assertSame('v2', DB::table('test_pivot_sb')->where(['a' => 'p', 'b' => 'q'])->value('value'));
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function syncIntoSandboxWithCompositeKeyRemovesOrphans(): void
     {
         DB::table('test_pivot')->insert(['a' => 'x', 'b' => 'y', 'value' => 'v1']);
@@ -62,7 +63,7 @@ final class HasSandboxCompositeKeyTest extends TestCase
         $this->assertNotInstanceOf(\stdClass::class, DB::table('test_pivot_sb')->where(['a' => 'orphan', 'b' => 'sb'])->first());
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function syncIntoActiveWithCompositeKeyCopiesRows(): void
     {
         DB::table('test_pivot_sb')->insert(['a' => 'x', 'b' => 'y', 'value' => 'from_sb']);
@@ -73,7 +74,7 @@ final class HasSandboxCompositeKeyTest extends TestCase
         $this->assertSame('from_sb', DB::table('test_pivot')->where(['a' => 'x', 'b' => 'y'])->value('value'));
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function getSandboxPrimaryKeyReturnsArrayForCompositeKey(): void
     {
         $model = new PivotModelStub();

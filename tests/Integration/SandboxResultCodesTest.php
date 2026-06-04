@@ -6,9 +6,11 @@ namespace Packages\Sandbox\Tests\Integration;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Packages\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
+use Packages\Sandbox\Exceptions\SandboxException;
 use Packages\Sandbox\Models\SandboxStatus;
 use Packages\Sandbox\Sandbox;
 use Packages\Sandbox\Tests\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 
 final class SandboxResultCodesTest extends TestCase
 {
@@ -40,7 +42,7 @@ final class SandboxResultCodesTest extends TestCase
     /**
      * Test result code 0 (rollback).
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function closeWithResultCodeZeroRollback(): void
     {
         $this->createDatabaseUser(1);
@@ -58,7 +60,7 @@ final class SandboxResultCodesTest extends TestCase
     /**
      * Test result code 1 (commit).
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function closeWithResultCodeOneCommit(): void
     {
         $this->createDatabaseUser(1);
@@ -76,7 +78,7 @@ final class SandboxResultCodesTest extends TestCase
     /**
      * Test result code 2 (save).
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function closeWithResultCodeTwoSave(): void
     {
         $this->createDatabaseUser(1);
@@ -94,7 +96,7 @@ final class SandboxResultCodesTest extends TestCase
     /**
      * Test that invalid result code throws exception.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function closeWithInvalidResultCodeThrows(): void
     {
         $this->createDatabaseUser(1);
@@ -103,14 +105,14 @@ final class SandboxResultCodesTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $this->expectException(\Packages\Sandbox\Exceptions\SandboxException::class);
+        $this->expectException(SandboxException::class);
         $this->sandbox->close(1, 99);
     }
 
     /**
      * Test that last_operation is set correctly when result is 0.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function resultCodeSetsLastOperation(): void
     {
         $this->createDatabaseUser(1);
@@ -129,7 +131,7 @@ final class SandboxResultCodesTest extends TestCase
     /**
      * Test that send_date is set when committing.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function commitSetsLastSendDate(): void
     {
         $this->createDatabaseUser(1);
@@ -147,7 +149,7 @@ final class SandboxResultCodesTest extends TestCase
     /**
      * Test that change_id is incremented or updated.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function changeIdIsUpdated(): void
     {
         $this->createDatabaseUser(1);
@@ -167,7 +169,7 @@ final class SandboxResultCodesTest extends TestCase
     /**
      * Test asyncUpdater parameter usage.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function closeWithAsyncUpdaterTrue(): void
     {
         $this->createDatabaseUser(1);
@@ -185,7 +187,7 @@ final class SandboxResultCodesTest extends TestCase
     /**
      * Test asyncUpdater parameter with false.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function closeWithAsyncUpdaterFalse(): void
     {
         $this->createDatabaseUser(1);

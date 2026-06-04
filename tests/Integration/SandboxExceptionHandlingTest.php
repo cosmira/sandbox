@@ -10,6 +10,7 @@ use Packages\Sandbox\Exceptions\SandboxException;
 use Packages\Sandbox\Models\SandboxStatus;
 use Packages\Sandbox\Sandbox;
 use Packages\Sandbox\Tests\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 
 final class SandboxExceptionHandlingTest extends TestCase
 {
@@ -42,7 +43,7 @@ final class SandboxExceptionHandlingTest extends TestCase
      * Test that closing free sandbox throws SandboxException.
      * This verifies the throw_if() call for free state check.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function closingFreeSandboxThrowsException(): void
     {
         SandboxStatus::factory()->create([
@@ -58,7 +59,7 @@ final class SandboxExceptionHandlingTest extends TestCase
      * Test that other user cannot close sandbox locked by someone else.
      * Verifies user ID comparison and locking logic (with non-zero result).
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function otherUserCannotCloseLockedSandbox(): void
     {
         $this->createDatabaseUser(1);
@@ -78,7 +79,7 @@ final class SandboxExceptionHandlingTest extends TestCase
      * Test that result=0 does not trigger user lock exception.
      * Verifies the && $result !== 0 condition.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function closingWithZeroResultIgnoresUserLock(): void
     {
         $this->createDatabaseUser(1);
@@ -99,7 +100,7 @@ final class SandboxExceptionHandlingTest extends TestCase
     /**
      * Test that string and int user IDs are compared correctly (casting).
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function stringAndIntUserIdsCompareCorrectly(): void
     {
         SandboxStatus::factory()->create([
@@ -118,7 +119,7 @@ final class SandboxExceptionHandlingTest extends TestCase
      * Test that sandbox status not found throws RuntimeException.
      * This verifies throw_unless() call.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function openWithoutStatusThrows(): void
     {
         $this->createDatabaseUser(1);
@@ -131,7 +132,7 @@ final class SandboxExceptionHandlingTest extends TestCase
     /**
      * Test that opening free sandbox succeeds.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function openingFreeSandboxSucceeds(): void
     {
         $this->createDatabaseUser(1);
@@ -150,7 +151,7 @@ final class SandboxExceptionHandlingTest extends TestCase
     /**
      * Test that note parameter is recorded when sandbox is opened.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function openingWithNoteRecordsIt(): void
     {
         $this->createDatabaseUser(1);
@@ -168,7 +169,7 @@ final class SandboxExceptionHandlingTest extends TestCase
     /**
      * Test that note parameter is recorded when sandbox is closed.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function closingWithNoteRecordsIt(): void
     {
         $this->createDatabaseUser(1);

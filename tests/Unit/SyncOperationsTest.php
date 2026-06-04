@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Packages\Sandbox\HasSandbox;
 use Packages\Sandbox\Tests\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 
 final class SyncOperationsTest extends TestCase
 {
@@ -40,7 +41,7 @@ final class SyncOperationsTest extends TestCase
     /**
      * Test that syncIntoSandbox properly copies rows from active to sandbox.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function syncIntoSandboxCopiesRowsFromActiveToSandbox(): void
     {
         DB::table('items')->insert([
@@ -58,7 +59,7 @@ final class SyncOperationsTest extends TestCase
     /**
      * Test that syncIntoSandbox removes orphaned rows (present in sandbox but not in active).
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function syncIntoSandboxRemovesOrphans(): void
     {
         DB::table('items')->insert([
@@ -77,7 +78,7 @@ final class SyncOperationsTest extends TestCase
     /**
      * Test that syncIntoSandbox updates changed rows in sandbox.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function syncIntoSandboxUpdatesChangedRows(): void
     {
         DB::table('items')->insert([
@@ -95,7 +96,7 @@ final class SyncOperationsTest extends TestCase
     /**
      * Test that syncIntoActive properly copies rows from sandbox to active.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function syncIntoActiveCopiesRowsFromSandboxToActive(): void
     {
         DB::table('items_sb')->insert([
@@ -113,7 +114,7 @@ final class SyncOperationsTest extends TestCase
     /**
      * Test that syncIntoActive removes orphaned rows in active table.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function syncIntoActiveRemovesOrphansFromActive(): void
     {
         DB::table('items_sb')->insert([
@@ -132,7 +133,7 @@ final class SyncOperationsTest extends TestCase
     /**
      * Test that getSandboxPrimaryKey correctly returns the key for composite key model.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function getSandboxPrimaryKeyReturnsCorrectKeyForSingleKey(): void
     {
         $model = new SimpleModelStub();
@@ -144,7 +145,7 @@ final class SyncOperationsTest extends TestCase
     /**
      * Test that empty sandbox can sync into active.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function syncIntoActiveWithEmptySandboxClearsActive(): void
     {
         DB::table('items')->insert([
@@ -159,7 +160,7 @@ final class SyncOperationsTest extends TestCase
     /**
      * Test that empty active can sync into sandbox.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function syncIntoSandboxWithEmptyActiveClearsSandbox(): void
     {
         DB::table('items_sb')->insert([

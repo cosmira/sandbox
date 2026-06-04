@@ -11,12 +11,11 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Traits\Dumpable;
 use Illuminate\Support\Traits\Macroable;
 use Illuminate\Support\Traits\Tappable;
-use Packages\Sandbox\Contracts\SandboxSyncRunnerInterface;
 use Packages\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
-use Packages\Sandbox\Events\MergeIntoActiveRequested;
-use Packages\Sandbox\Events\MergeIntoSandboxRequested;
-use Packages\Sandbox\Events\SandboxCommitted;
+use Packages\Sandbox\Events\SandboxApplying;
+use Packages\Sandbox\Events\SandboxClosed;
 use Packages\Sandbox\Events\SandboxOpened;
+use Packages\Sandbox\Events\SandboxResetting;
 use Packages\Sandbox\Exceptions\SandboxException;
 use Packages\Sandbox\Models\SandboxStatus;
 
@@ -24,7 +23,7 @@ use Packages\Sandbox\Models\SandboxStatus;
  * Синглтон для открытия/закрытия сессии и синхронизации данных.
  *
  * Получить: app(Sandbox::class) или фасад \Packages\Sandbox\Facades\Sandbox.
- * События MergeIntoSandboxRequested / MergeIntoActiveRequested — в слушателях вызываете свой синхронизатор (модели с HasSandbox).
+ * События синхронизации данных — в слушателях вызываете свой синхронизатор (модели с HasSandbox).
  *
  * @see README.md
  */
@@ -60,7 +59,7 @@ class Sandbox
             }
 
             if ($status->isFree() || ($force && $status->isLocked() && (string) $status->user_id !== (string) $userId)) {
-                Event::dispatch(new MergeIntoSandboxRequested());
+                Event::dispatch(new SandboxResetting());
             }
 
             $status->update([
@@ -81,7 +80,7 @@ class Sandbox
      *
      * @param int|string $userId       ID или UUID пользователя
      * @param int        $result       0 — откат, 1 — коммит, 2 — сохранить без коммита
-     * @param bool       $asyncUpdater Передаётся в SandboxCommitted для выбора способа обновления
+     * @param bool       $asyncUpdater Передаётся в SandboxClosed для выбора способа обновления
      *
      * @throws SandboxException
      */
@@ -133,44 +132,52 @@ class Sandbox
 
     private function handleRollback(SandboxStatus $status, int|string $userId, ?string $note): void
     {
-        Event::dispatch(new MergeIntoSandboxRequested());
+        $closedAt = now();
+
+        Event::dispatch(new SandboxResetting());
 
         $status->update([
             'status'         => SandboxStatusEnum::Free,
             'user_id'        => $userId,
             'last_operation' => 0,
             'note'           => $note,
-            'change_date'    => now(),
+            'change_date'    => $closedAt,
         ]);
+
+        Event::dispatch(new SandboxClosed($userId, 0, $closedAt, $note, false));
     }
 
     private function handleCommit(SandboxStatus $status, int|string $userId, ?string $note, bool $asyncUpdater): void
     {
-        $sendDate = now();
+        $closedAt = now();
 
-        Event::dispatch(new MergeIntoActiveRequested());
+        Event::dispatch(new SandboxApplying());
 
         $status->update([
             'status'         => SandboxStatusEnum::Free,
             'user_id'        => $userId,
             'last_operation' => 1,
             'note'           => $note,
-            'send_date'      => $sendDate,
-            'change_date'    => now(),
+            'send_date'      => $closedAt,
+            'change_date'    => $closedAt,
         ]);
 
-        Event::dispatch(new SandboxCommitted($userId, $sendDate, $asyncUpdater));
+        Event::dispatch(new SandboxClosed($userId, 1, $closedAt, $note, $asyncUpdater));
     }
 
     private function handleSave(SandboxStatus $status, int|string $userId, ?string $note): void
     {
+        $closedAt = now();
+
         $status->update([
             'status'         => SandboxStatusEnum::Saved,
             'user_id'        => $userId,
             'last_operation' => 2,
             'note'           => $note,
-            'change_date'    => now(),
+            'change_date'    => $closedAt,
         ]);
+
+        Event::dispatch(new SandboxClosed($userId, 2, $closedAt, $note, false));
     }
 
     /**
@@ -222,18 +229,6 @@ class Sandbox
             $this->resetSingleRecord($instance);
         } else {
             $this->resetBulk($modelClass);
-        }
-    }
-
-    /**
-     * Синхронизировать данные в sandbox по ключу (передаётся в sync runner).
-     *
-     * @param array<string, mixed> $data
-     */
-    public function syncToActive(string $dataKey, array $data): void
-    {
-        if ($data !== []) {
-            resolve(SandboxSyncRunnerInterface::class)->syncToSandbox([$dataKey => $data]);
         }
     }
 

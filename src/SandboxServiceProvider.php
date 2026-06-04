@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Packages\Sandbox;
 
+use function class_exists;
+
 use Illuminate\Support\ServiceProvider;
+use Packages\Sandbox\Commands\BenchmarkSyncCommand;
 use Packages\Sandbox\Commands\CloseSandboxCommand;
 use Packages\Sandbox\Commands\OpenSandboxCommand;
 use Packages\Sandbox\Commands\StatusSandboxCommand;
-use Packages\Sandbox\Contracts\SandboxSyncRunnerInterface;
-use function class_exists;
 
 class SandboxServiceProvider extends ServiceProvider
 {
@@ -23,7 +24,6 @@ class SandboxServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/sandbox.php', 'sandbox');
 
         $this->app->singleton(Sandbox::class);
-        $this->app->bind(SandboxSyncRunnerInterface::class, NullSandboxSyncRunner::class);
     }
 
     /**
@@ -58,7 +58,7 @@ class SandboxServiceProvider extends ServiceProvider
 
             // Добавить benchmark команду только если доступен dev пакет
             if (class_exists('DragonCode\Benchmark\Benchmark')) {
-                $commands[] = \Packages\Sandbox\Commands\BenchmarkSyncCommand::class;
+                $commands[] = BenchmarkSyncCommand::class;
             }
 
             $this->commands($commands);

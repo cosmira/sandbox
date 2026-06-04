@@ -6,7 +6,9 @@ namespace Packages\Sandbox\Tests\Integration;
 
 use Packages\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
 use Packages\Sandbox\Models\SandboxStatus;
+use Packages\Sandbox\Sandbox;
 use Packages\Sandbox\Tests\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 
 /**
  * @group commands
@@ -41,7 +43,7 @@ final class CommandsTest extends TestCase
         ]);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canOpenSandboxViaCommand(): void
     {
         $this->artisan('sandbox:open', ['userId' => '1'])
@@ -53,11 +55,11 @@ final class CommandsTest extends TestCase
         $this->assertEquals(1, $status->user_id);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canCloseSandboxWithCommitViaCommand(): void
     {
         // First open
-        app(\Packages\Sandbox\Sandbox::class)->open(1);
+        app(Sandbox::class)->open(1);
 
         // Then close with commit
         $this->artisan('sandbox:close', [
@@ -71,10 +73,10 @@ final class CommandsTest extends TestCase
         $this->assertEquals(SandboxStatusEnum::Free, $status->status);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canCloseSandboxWithRollbackViaCommand(): void
     {
-        app(\Packages\Sandbox\Sandbox::class)->open(1);
+        app(Sandbox::class)->open(1);
 
         $this->artisan('sandbox:close', [
             'userId'   => '1',
@@ -87,10 +89,10 @@ final class CommandsTest extends TestCase
         $this->assertEquals(SandboxStatusEnum::Free, $status->status);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canCloseSandboxWithSaveViaCommand(): void
     {
-        app(\Packages\Sandbox\Sandbox::class)->open(1);
+        app(Sandbox::class)->open(1);
 
         $this->artisan('sandbox:close', [
             'userId'   => '1',
@@ -103,7 +105,7 @@ final class CommandsTest extends TestCase
         $this->assertEquals(SandboxStatusEnum::Saved, $status->status);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canCheckStatusViaCommand(): void
     {
         // Check free status
@@ -112,20 +114,20 @@ final class CommandsTest extends TestCase
             ->expectsOutput('Sandbox is FREE (not in use)');
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canCheckLockedStatusViaCommand(): void
     {
-        app(\Packages\Sandbox\Sandbox::class)->open(1);
+        app(Sandbox::class)->open(1);
 
         $this->artisan('sandbox:status')
             ->assertSuccessful()
             ->expectsOutput('Sandbox is LOCKED by user: 1');
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canCheckStatusVerbose(): void
     {
-        app(\Packages\Sandbox\Sandbox::class)->open(1);
+        app(Sandbox::class)->open(1);
 
         $this->artisan('sandbox:status', ['--details' => true])
             ->assertSuccessful()
@@ -133,10 +135,10 @@ final class CommandsTest extends TestCase
             ->expectsOutput('Detailed Information:');
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function commandRejectsInvalidResult(): void
     {
-        app(\Packages\Sandbox\Sandbox::class)->open(1);
+        app(Sandbox::class)->open(1);
 
         $this->artisan('sandbox:close', [
             'userId'   => '1',
@@ -146,11 +148,11 @@ final class CommandsTest extends TestCase
             ->expectsOutput('Result code must be 0 (rollback), 1 (commit), or 2 (save)');
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function openCommandCanForce(): void
     {
         // Open for user 1
-        app(\Packages\Sandbox\Sandbox::class)->open(1);
+        app(Sandbox::class)->open(1);
 
         // Try to force open for user 2
         $this->artisan('sandbox:open', [
@@ -164,7 +166,7 @@ final class CommandsTest extends TestCase
         $this->assertEquals(2, $status->user_id);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function openCommandWithNote(): void
     {
         $this->artisan('sandbox:open', [

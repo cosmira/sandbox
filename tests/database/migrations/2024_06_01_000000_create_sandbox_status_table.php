@@ -38,7 +38,7 @@ return new class() extends Migration
             $blueprint->dateTime('send_date')->nullable();
         });
 
-        \DB::table($table)->insert([
+        DB::table($table)->insert([
             'status'         => 0,
             'last_operation' => null,
             'note'           => null,

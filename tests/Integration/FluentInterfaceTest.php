@@ -6,13 +6,15 @@ namespace Packages\Sandbox\Tests\Integration;
 
 use Illuminate\Support\Facades\Event;
 use Packages\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
-use Packages\Sandbox\Events\MergeIntoActiveRequested;
-use Packages\Sandbox\Events\MergeIntoSandboxRequested;
-use Packages\Sandbox\Events\SandboxCommitted;
+use Packages\Sandbox\Events\SandboxApplying;
+use Packages\Sandbox\Events\SandboxClosed;
+use Packages\Sandbox\Events\SandboxResetting;
 use Packages\Sandbox\Exceptions\SandboxException;
 use Packages\Sandbox\Facades\Sandbox;
 use Packages\Sandbox\Models\SandboxStatus;
+use Packages\Sandbox\SandboxBuilder;
 use Packages\Sandbox\Tests\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 
 final class FluentInterfaceTest extends TestCase
 {
@@ -44,10 +46,10 @@ final class FluentInterfaceTest extends TestCase
         ]);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function fluentBuilderCanOpenSandbox(): void
     {
-        Event::fake([MergeIntoSandboxRequested::class]);
+        Event::fake([SandboxResetting::class]);
 
         Sandbox::for(1)->open();
 
@@ -56,16 +58,16 @@ final class FluentInterfaceTest extends TestCase
         $this->assertEquals(SandboxStatusEnum::Locked, $status->status);
         $this->assertEquals(1, $status->user_id);
 
-        Event::assertDispatched(MergeIntoSandboxRequested::class);
+        Event::assertDispatched(SandboxResetting::class);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function fluentBuilderCanCommit(): void
     {
         Event::fake([
-            MergeIntoSandboxRequested::class,
-            MergeIntoActiveRequested::class,
-            SandboxCommitted::class,
+            SandboxResetting::class,
+            SandboxApplying::class,
+            SandboxClosed::class,
         ]);
 
         Sandbox::for(1)->open();
@@ -74,15 +76,15 @@ final class FluentInterfaceTest extends TestCase
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Free, $status->status);
 
-        Event::assertDispatched(MergeIntoActiveRequested::class);
-        Event::assertDispatched(SandboxCommitted::class);
+        Event::assertDispatched(SandboxApplying::class);
+        Event::assertDispatched(SandboxClosed::class);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function fluentBuilderCanRollback(): void
     {
         Event::fake([
-            MergeIntoSandboxRequested::class,
+            SandboxResetting::class,
         ]);
 
         Sandbox::for(1)->open();
@@ -92,14 +94,14 @@ final class FluentInterfaceTest extends TestCase
         $this->assertEquals(SandboxStatusEnum::Free, $status->status);
         $this->assertEquals(0, $status->last_operation);
 
-        // MergeIntoSandboxRequested should be dispatched twice - once on open, once on rollback
-        Event::assertDispatchedTimes(MergeIntoSandboxRequested::class, 2);
+        // Resetting is requested once on open and once on rollback.
+        Event::assertDispatchedTimes(SandboxResetting::class, 2);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function fluentBuilderCanSaveWithoutCommit(): void
     {
-        Event::fake([MergeIntoSandboxRequested::class]);
+        Event::fake([SandboxResetting::class]);
 
         Sandbox::for(1)->open();
         Sandbox::for(1)->save(note: 'Test save');
@@ -108,11 +110,11 @@ final class FluentInterfaceTest extends TestCase
         $this->assertEquals(SandboxStatusEnum::Saved, $status->status);
         $this->assertEquals(2, $status->last_operation);
 
-        // MergeIntoSandboxRequested should only be dispatched on open, not on save
-        Event::assertDispatchedTimes(MergeIntoSandboxRequested::class, 1);
+        // Saving keeps sandbox data as-is.
+        Event::assertDispatchedTimes(SandboxResetting::class, 1);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function fluentBuilderCanGetStatus(): void
     {
         Sandbox::for(1)->open();
@@ -124,27 +126,27 @@ final class FluentInterfaceTest extends TestCase
         $this->assertEquals(1, $status->user_id);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function fluentBuilderCanChainMethods(): void
     {
         Event::fake([
-            MergeIntoSandboxRequested::class,
-            MergeIntoActiveRequested::class,
-            SandboxCommitted::class,
+            SandboxResetting::class,
+            SandboxApplying::class,
+            SandboxClosed::class,
         ]);
 
         // Test fluent chaining
         $builder = Sandbox::for(1)->open();
-        $this->assertInstanceOf(\Packages\Sandbox\SandboxBuilder::class, $builder);
+        $this->assertInstanceOf(SandboxBuilder::class, $builder);
 
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Locked, $status->status);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function backwardCompatibilityWithOldAPI(): void
     {
-        Event::fake([MergeIntoSandboxRequested::class]);
+        Event::fake([SandboxResetting::class]);
 
         // Old API
         app(\Packages\Sandbox\Sandbox::class)->open(1);
@@ -171,10 +173,10 @@ final class FluentInterfaceTest extends TestCase
         $this->assertEquals($oldStatus, $status2->status);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function builderThrowsExceptionWhenSandboxLockedByAnotherUser(): void
     {
-        Event::fake([MergeIntoSandboxRequested::class]);
+        Event::fake([SandboxResetting::class]);
 
         Sandbox::for(1)->open();
 
@@ -182,10 +184,10 @@ final class FluentInterfaceTest extends TestCase
         Sandbox::for(2)->open();
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function builderCanForceOpenWhenLockedByAnotherUser(): void
     {
-        Event::fake([MergeIntoSandboxRequested::class]);
+        Event::fake([SandboxResetting::class]);
 
         Sandbox::for(1)->open();
 

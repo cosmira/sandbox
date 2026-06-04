@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\Facade;
  * @method static void                                        close(int|string $userId, int $result, ?string $note = null, bool $asyncUpdater = true)
  * @method static \Packages\Sandbox\Models\SandboxStatus|null status()
  * @method static void                                        resetSandboxData(string|\Illuminate\Database\Eloquent\Model $modelOrClass)
- * @method static void                                        syncToActive(string $dataKey, array $data)
  * @method static \Packages\Sandbox\SandboxBuilder            for(int|string $userId)
  * @method static \Packages\Sandbox\SandboxBuilder            me()
  *

@@ -7,6 +7,7 @@ namespace Packages\Sandbox\Tests;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Orchestra\Testbench\TestCase as BaseTestCase;
+use Packages\Sandbox\SandboxServiceProvider;
 use Packages\Sandbox\Testing\SandboxTestHelpers;
 
 class TestUser extends Model implements Authenticatable
@@ -60,7 +61,7 @@ abstract class TestCase extends BaseTestCase
     protected function getPackageProviders($app): array
     {
         return [
-            \Packages\Sandbox\SandboxServiceProvider::class,
+            SandboxServiceProvider::class,
         ];
     }
 

@@ -8,6 +8,7 @@ use Packages\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
 use Packages\Sandbox\Models\SandboxStatus;
 use Packages\Sandbox\Testing\SandboxTestHelpers;
 use Packages\Sandbox\Tests\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 
 final class TestingHelpersTest extends TestCase
 {
@@ -41,7 +42,7 @@ final class TestingHelpersTest extends TestCase
         ]);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canOpenSandboxWithHelper(): void
     {
         $this->openSandbox(userId: 1);
@@ -49,13 +50,13 @@ final class TestingHelpersTest extends TestCase
         $this->assertSandboxLocked(userId: 1);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canAssertSandboxFree(): void
     {
         $this->assertSandboxFree();
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canCommitSandboxWithHelper(): void
     {
         $this->openSandbox(userId: 1);
@@ -64,7 +65,7 @@ final class TestingHelpersTest extends TestCase
         $this->assertSandboxFree();
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canRollbackSandboxWithHelper(): void
     {
         $this->openSandbox(userId: 1);
@@ -73,7 +74,7 @@ final class TestingHelpersTest extends TestCase
         $this->assertSandboxFree();
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canSaveSandboxWithHelper(): void
     {
         $this->openSandbox(userId: 1);
@@ -82,7 +83,7 @@ final class TestingHelpersTest extends TestCase
         $this->assertSandboxSaved();
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canGetSandboxStatus(): void
     {
         $this->openSandbox(userId: 1);
@@ -94,7 +95,7 @@ final class TestingHelpersTest extends TestCase
         $this->assertEquals(1, $status->user_id);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canCheckSandboxStatuses(): void
     {
         // Initially free
@@ -109,7 +110,7 @@ final class TestingHelpersTest extends TestCase
         $this->assertSandboxSaved();
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canOpenWithOptions(): void
     {
         // Open first user
@@ -121,7 +122,7 @@ final class TestingHelpersTest extends TestCase
         $this->assertSandboxLocked(userId: 2);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canOpenWithNote(): void
     {
         $this->openSandbox(userId: 1, note: 'Test note');
@@ -130,7 +131,7 @@ final class TestingHelpersTest extends TestCase
         $this->assertEquals('Test note', $status->note);
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canApplySandbox(): void
     {
         // This tests that the applySandbox method can be called
@@ -147,7 +148,7 @@ final class TestingHelpersTest extends TestCase
         }
     }
 
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function canSwitchModelsTable(): void
     {
         // This tests that the helper methods exist and are callable

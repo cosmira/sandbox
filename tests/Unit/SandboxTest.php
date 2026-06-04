@@ -8,10 +8,10 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Packages\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
-use Packages\Sandbox\Events\MergeIntoActiveRequested;
-use Packages\Sandbox\Events\MergeIntoSandboxRequested;
-use Packages\Sandbox\Events\SandboxCommitted;
+use Packages\Sandbox\Events\SandboxApplying;
+use Packages\Sandbox\Events\SandboxClosed;
 use Packages\Sandbox\Events\SandboxOpened;
+use Packages\Sandbox\Events\SandboxResetting;
 use Packages\Sandbox\Exceptions\SandboxException;
 use Packages\Sandbox\Models\SandboxStatus;
 use Packages\Sandbox\Sandbox;
@@ -48,7 +48,7 @@ final class SandboxTest extends TestCase
     #[Test]
     public function itCanOpenWhenSandboxIsFree(): void
     {
-        Event::fake([MergeIntoSandboxRequested::class, SandboxOpened::class]);
+        Event::fake([SandboxResetting::class, SandboxOpened::class]);
 
         $this->createDatabaseUser(1);
         SandboxStatus::factory()->create([
@@ -58,7 +58,7 @@ final class SandboxTest extends TestCase
 
         $this->sandbox->open(1);
 
-        Event::assertDispatched(MergeIntoSandboxRequested::class);
+        Event::assertDispatched(SandboxResetting::class);
         Event::assertDispatched(SandboxOpened::class, function (SandboxOpened $event) {
             return $event->userId === 1
                 && $event->force === false
@@ -89,7 +89,7 @@ final class SandboxTest extends TestCase
     #[Test]
     public function itCanForceOpenWhenLockedByAnotherUser(): void
     {
-        Event::fake([MergeIntoSandboxRequested::class, SandboxOpened::class]);
+        Event::fake([SandboxResetting::class, SandboxOpened::class]);
 
         $this->createDatabaseUser(1);
         $this->createDatabaseUser(2);
@@ -100,7 +100,7 @@ final class SandboxTest extends TestCase
 
         $this->sandbox->open(1, force: true, note: 'Forced open');
 
-        Event::assertDispatched(MergeIntoSandboxRequested::class);
+        Event::assertDispatched(SandboxResetting::class);
         Event::assertDispatched(SandboxOpened::class, function (SandboxOpened $event) {
             return $event->userId === 1
                 && $event->force === true
@@ -114,7 +114,7 @@ final class SandboxTest extends TestCase
     #[Test]
     public function itCanRollbackChanges(): void
     {
-        Event::fake([MergeIntoSandboxRequested::class]);
+        Event::fake([SandboxResetting::class, SandboxClosed::class]);
 
         $this->createDatabaseUser(1);
         SandboxStatus::factory()->create([
@@ -124,7 +124,13 @@ final class SandboxTest extends TestCase
 
         $this->sandbox->close(1, result: 0);
 
-        Event::assertDispatched(MergeIntoSandboxRequested::class);
+        Event::assertDispatched(SandboxResetting::class);
+        Event::assertDispatched(SandboxClosed::class, function (SandboxClosed $event) {
+            return $event->userId === 1
+                && $event->result === 0
+                && $event->note === null
+                && $event->asyncUpdater === false;
+        });
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Free, $status->status);
         $this->assertEquals(0, $status->last_operation);
@@ -133,7 +139,7 @@ final class SandboxTest extends TestCase
     #[Test]
     public function itCanCommitChanges(): void
     {
-        Event::fake([MergeIntoActiveRequested::class, SandboxCommitted::class]);
+        Event::fake([SandboxApplying::class, SandboxClosed::class]);
 
         $this->createDatabaseUser(1);
         SandboxStatus::factory()->create([
@@ -143,9 +149,12 @@ final class SandboxTest extends TestCase
 
         $this->sandbox->close(1, result: 1, asyncUpdater: false);
 
-        Event::assertDispatched(MergeIntoActiveRequested::class);
-        Event::assertDispatched(SandboxCommitted::class, function (SandboxCommitted $e) {
-            return $e->userId === 1 && $e->asyncUpdater === false;
+        Event::assertDispatched(SandboxApplying::class);
+        Event::assertDispatched(SandboxClosed::class, function (SandboxClosed $e) {
+            return $e->userId === 1
+                && $e->result === 1
+                && $e->note === null
+                && $e->asyncUpdater === false;
         });
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Free, $status->status);
@@ -156,7 +165,7 @@ final class SandboxTest extends TestCase
     #[Test]
     public function itCanSaveChangesWithoutCommit(): void
     {
-        Event::fake([MergeIntoActiveRequested::class, SandboxCommitted::class]);
+        Event::fake([SandboxApplying::class, SandboxClosed::class]);
 
         $this->createDatabaseUser(1);
         SandboxStatus::factory()->create([
@@ -166,8 +175,13 @@ final class SandboxTest extends TestCase
 
         $this->sandbox->close(1, result: 2);
 
-        Event::assertNotDispatched(MergeIntoActiveRequested::class);
-        Event::assertNotDispatched(SandboxCommitted::class);
+        Event::assertNotDispatched(SandboxApplying::class);
+        Event::assertDispatched(SandboxClosed::class, function (SandboxClosed $event) {
+            return $event->userId === 1
+                && $event->result === 2
+                && $event->note === null
+                && $event->asyncUpdater === false;
+        });
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Saved, $status->status);
         $this->assertEquals(2, $status->last_operation);
@@ -221,7 +235,7 @@ final class SandboxTest extends TestCase
     #[Test]
     public function itAcceptsUuidAsUserId(): void
     {
-        Event::fake([MergeIntoSandboxRequested::class]);
+        Event::fake([SandboxResetting::class]);
 
         $uuid = '550e8400-e29b-41d4-a716-446655440000';
         SandboxStatus::factory()->create([

@@ -7,9 +7,11 @@ namespace Packages\Sandbox\Tests\Integration;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
 use Packages\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
+use Packages\Sandbox\Exceptions\SandboxException;
 use Packages\Sandbox\Models\SandboxStatus;
 use Packages\Sandbox\Sandbox;
 use Packages\Sandbox\Tests\TestCase;
+use PHPUnit\Framework\Attributes\Test;
 
 final class SandboxLoggingTest extends TestCase
 {
@@ -42,7 +44,7 @@ final class SandboxLoggingTest extends TestCase
      * Test that opening sandbox executes debug logging.
      * This verifies Log::debug() call is not removed (MethodCallRemoval mutation).
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function openingSandboxExecutesLogging(): void
     {
         $this->createDatabaseUser(1);
@@ -64,7 +66,7 @@ final class SandboxLoggingTest extends TestCase
      * Test that closing sandbox executes info logging.
      * This verifies Log::info() call is not removed (MethodCallRemoval mutation).
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function closingSandboxExecutesLogging(): void
     {
         $this->createDatabaseUser(1);
@@ -84,7 +86,7 @@ final class SandboxLoggingTest extends TestCase
     /**
      * Test that closing with different result codes works (verifies result parameter is used).
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function closingSandboxWithDifferentResults(): void
     {
         $this->createDatabaseUser(1);
@@ -104,7 +106,7 @@ final class SandboxLoggingTest extends TestCase
      * Test that string user IDs are properly handled.
      * This verifies string casting works in comparison logic.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function sandboxHandlesStringUserIds(): void
     {
         $userId = 'user-uuid-123';
@@ -131,7 +133,7 @@ final class SandboxLoggingTest extends TestCase
      * Test that force flag properly overrides locking logic.
      * This verifies force parameter is not optimized away.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function forceOpenFlagOverridesLocking(): void
     {
         $this->createDatabaseUser(1);
@@ -144,14 +146,14 @@ final class SandboxLoggingTest extends TestCase
         ]);
 
         // User 2 tries to open without force - should fail
-        $this->expectException(\Packages\Sandbox\Exceptions\SandboxException::class);
+        $this->expectException(SandboxException::class);
         $this->sandbox->open(2, force: false);
     }
 
     /**
      * Test that force flag allows overriding another user's lock.
      */
-    #[\PHPUnit\Framework\Attributes\Test]
+    #[Test]
     public function forceOpenBypassesAnotherUserLock(): void
     {
         $this->createDatabaseUser(1);
