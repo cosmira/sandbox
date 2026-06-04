@@ -16,8 +16,6 @@ class SandboxStatusFactory extends Factory
     protected $model = SandboxStatus::class;
 
     /**
-     * Определить базовые атрибуты модели.
-     *
      * @return array<string, mixed>
      */
     public function definition(): array

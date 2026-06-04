@@ -8,7 +8,7 @@ use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * Sandbox нужно сбросить до текущего состояния active-таблиц.
+ * The sandbox should be reset from the active tables.
  */
 class SandboxResetting
 {

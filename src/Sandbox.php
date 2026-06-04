@@ -20,12 +20,7 @@ use Packages\Sandbox\Exceptions\SandboxException;
 use Packages\Sandbox\Models\SandboxStatus;
 
 /**
- * Синглтон для открытия/закрытия сессии и синхронизации данных.
- *
- * Получить: app(Sandbox::class) или фасад \Packages\Sandbox\Facades\Sandbox.
- * События синхронизации данных — в слушателях вызываете свой синхронизатор (модели с HasSandbox).
- *
- * @see README.md
+ * Manages the sandbox session and dispatches domain events.
  */
 class Sandbox
 {
@@ -34,11 +29,7 @@ class Sandbox
     use Tappable;
 
     /**
-     * Открыть sandbox (начать редактирование).
-     *
-     * @param int|string $user ID или UUID пользователя
-     *
-     * @throws SandboxException Если sandbox заблокирован другим пользователем
+     * @throws SandboxException
      */
     public function open(int|string|Model $user, bool $force = false, ?string $note = null): void
     {
@@ -76,12 +67,6 @@ class Sandbox
     }
 
     /**
-     * Закрыть sandbox (завершить редактирование).
-     *
-     * @param int|string $userId       ID или UUID пользователя
-     * @param int        $result       0 — откат, 1 — коммит, 2 — сохранить без коммита
-     * @param bool       $asyncUpdater Передаётся в SandboxClosed для выбора способа обновления
-     *
      * @throws SandboxException
      */
     public function close(int|string $userId, int $result, ?string $note = null, bool $asyncUpdater = true): void
@@ -115,7 +100,7 @@ class Sandbox
     }
 
     /**
-     * @deprecated Используйте open()
+     * @deprecated Use open().
      */
     public function beginEdit(int|string $userId, bool $force = false, ?string $note = null): void
     {
@@ -123,7 +108,7 @@ class Sandbox
     }
 
     /**
-     * @deprecated Используйте close()
+     * @deprecated Use close().
      */
     public function endEdit(int|string $userId, int $result, ?string $note = null, bool $asyncUpdater = true): void
     {
@@ -180,18 +165,13 @@ class Sandbox
         Event::dispatch(new SandboxClosed($userId, 2, $closedAt, $note, false));
     }
 
-    /**
-     * Текущий статус sandbox.
-     *
-     * Использование: Sandbox::status()?->status, ->user_id, ->isLocked(), ->isOwnedBy($userId)
-     */
     public function status(): ?SandboxStatus
     {
         return SandboxStatus::first();
     }
 
     /**
-     * @deprecated Используйте status()
+     * @deprecated Use status().
      */
     public function getStatus(): array
     {
@@ -204,7 +184,7 @@ class Sandbox
     }
 
     /**
-     * @deprecated Используйте status()?->isOwnedBy($userId)
+     * @deprecated Use status()?->isOwnedBy($userId).
      */
     public function isSandboxUser(int|string $userId): bool
     {
@@ -212,10 +192,6 @@ class Sandbox
     }
 
     /**
-     * Сбросить Sandbox данные для модели (только для моделей с syncIntoSandbox).
-     *
-     * Класс — сброс массово (syncIntoSandbox). Экземпляр — сброс одной записи (копирование строки).
-     *
      * @param class-string<Model>|Model $modelOrClass
      */
     public function resetSandboxData(string|Model $modelOrClass): void

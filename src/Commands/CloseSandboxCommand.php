@@ -13,13 +13,6 @@ class CloseSandboxCommand extends Command
 
     protected $description = 'Close a sandbox session';
 
-    /**
-     * Выполнить команду.
-     *
-     * @param Sandbox $sandbox
-     *
-     * @return int
-     */
     public function handle(Sandbox $sandbox): int
     {
         $userId = $this->argument('userId');
@@ -38,7 +31,6 @@ class CloseSandboxCommand extends Command
         $note = $this->option('note');
         $asyncUpdater = (bool) $this->option('async');
 
-        // Validate result value
         if (! in_array($result, [0, 1, 2], true)) {
             $this->error('Result code must be 0 (rollback), 1 (commit), or 2 (save)');
 

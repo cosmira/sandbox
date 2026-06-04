@@ -1,5 +1,9 @@
 # Sandbox
 
+[![Coding Guidelines](https://github.com/cosmira/sandbox/actions/workflows/code-style.yml/badge.svg)](https://github.com/cosmira/sandbox/actions/workflows/code-style.yml)
+[![Tests](https://github.com/cosmira/sandbox/actions/workflows/phpunit.yml/badge.svg)](https://github.com/cosmira/sandbox/actions/workflows/phpunit.yml)
+[![Code Coverage](https://github.com/cosmira/sandbox/actions/workflows/coverage.yml/badge.svg)](https://github.com/cosmira/sandbox/actions/workflows/coverage.yml)
+
 Laravel-пакет для редактирования конфигурации в песочнице: пользователь меняет sandbox-копию данных, а приложение затем откатывает, коммитит или сохраняет сессию без коммита.
 
 У каждой sandbox-модели две таблицы:

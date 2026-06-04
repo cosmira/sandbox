@@ -6,18 +6,6 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-/**
- * Таблица статуса песочницы (одна строка на приложение).
- *
- * Поля:
- * - status: 0 = свободна, 1 = занята, 2 = сохранена без коммита
- * - last_operation: 0 = откат, 1 = коммит, 2 = сохранение без коммита
- * - note: заметка (например причина открытия/закрытия)
- * - change_date: дата последнего изменения статуса
- * - user_id: кто держит сессию (int или UUID string)
- * - change_id: счётчик изменений (для инвалидации кэша и т.п.)
- * - send_date: дата последнего коммита
- */
 return new class() extends Migration
 {
     public function up(): void

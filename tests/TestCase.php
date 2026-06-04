@@ -73,18 +73,15 @@ abstract class TestCase extends BaseTestCase
             'database' => ':memory:',
         ]);
 
-        // Set the auth model
         $app['config']->set('auth.providers.users.model', TestUser::class);
     }
 
     protected function defineDatabaseMigrations(): void
     {
+        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadMigrationsFrom(__DIR__.'/database/migrations');
     }
 
-    /**
-     * Create a test user for authentication.
-     */
     protected function createUser(?int $id = null): TestUser
     {
         $user = new TestUser();

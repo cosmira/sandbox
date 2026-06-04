@@ -13,13 +13,6 @@ class StatusSandboxCommand extends Command
 
     protected $description = 'Display current sandbox status';
 
-    /**
-     * Выполнить команду.
-     *
-     * @param Sandbox $sandbox
-     *
-     * @return int
-     */
     public function handle(Sandbox $sandbox): int
     {
         $status = $sandbox->status();
@@ -54,13 +47,6 @@ class StatusSandboxCommand extends Command
         return self::SUCCESS;
     }
 
-    /**
-     * Получить человеческое имя операции по коду.
-     *
-     * @param int|null $operation
-     *
-     * @return string
-     */
     private function getOperationName(?int $operation): string
     {
         return match ($operation) {

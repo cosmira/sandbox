@@ -14,11 +14,6 @@ use Packages\Sandbox\Commands\StatusSandboxCommand;
 
 class SandboxServiceProvider extends ServiceProvider
 {
-    /**
-     * Зарегистрировать сервисы пакета.
-     *
-     * @return void
-     */
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/sandbox.php', 'sandbox');
@@ -26,19 +21,12 @@ class SandboxServiceProvider extends ServiceProvider
         $this->app->singleton(Sandbox::class);
     }
 
-    /**
-     * Загрузить сервисы пакета.
-     *
-     * @return void
-     */
     public function boot(): void
     {
-        // Регистрировать macroable методы
         Sandbox::macro('for', function (int|string $userId) {
             return new SandboxBuilder($userId);
         });
 
-        // Автоматическое определение текущего пользователя
         Sandbox::macro('me', function () {
             $user = auth()->user();
             if (! $user) {
@@ -49,14 +37,12 @@ class SandboxServiceProvider extends ServiceProvider
         });
 
         if ($this->app->runningInConsole()) {
-            // Регистрировать команды
             $commands = [
                 OpenSandboxCommand::class,
                 CloseSandboxCommand::class,
                 StatusSandboxCommand::class,
             ];
 
-            // Добавить benchmark команду только если доступен dev пакет
             if (class_exists('DragonCode\Benchmark\Benchmark')) {
                 $commands[] = BenchmarkSyncCommand::class;
             }

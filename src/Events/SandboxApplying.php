@@ -8,7 +8,7 @@ use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * Sandbox нужно применить в active-таблицы.
+ * The sandbox should be applied to the active tables.
  */
 class SandboxApplying
 {

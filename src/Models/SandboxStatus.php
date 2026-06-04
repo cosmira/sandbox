@@ -13,18 +13,13 @@ class SandboxStatus extends Model
 {
     use HasFactory;
 
-    /** Модель не использует timestamps автоматически. */
     public $timestamps = false;
 
-    /** Первичный ключ не автоинкрементируется. */
     public $incrementing = false;
 
-    /** Первичный ключ не определен (используется значение по умолчанию). */
     protected $primaryKey;
 
     /**
-     * Атрибуты, которые можно массово присваивать.
-     *
      * @var array<int, string>
      */
     protected $fillable = [
@@ -38,8 +33,6 @@ class SandboxStatus extends Model
     ];
 
     /**
-     * Приведение типов атрибутов.
-     *
      * @var array<string, string>
      */
     protected $casts = [
@@ -48,14 +41,8 @@ class SandboxStatus extends Model
         'change_date'    => 'datetime',
         'send_date'      => 'datetime',
         'change_id'      => 'integer',
-        // user_id не приводим к int — может быть UUID (string)
     ];
 
-    /**
-     * Получить имя таблицы модели.
-     *
-     * @return string
-     */
     public function getTable(): string
     {
         return config('sandbox.table', 'sandbox_status');
@@ -66,47 +53,27 @@ class SandboxStatus extends Model
         return SandboxStatusFactory::new();
     }
 
-    /**
-     * Проверить, что песочница свободна (не используется).
-     *
-     * @return bool
-     */
     public function isFree(): bool
     {
         return $this->status === SandboxStatusEnum::Free;
     }
 
-    /**
-     * Проверить, что песочница заблокирована пользователем.
-     *
-     * @return bool
-     */
     public function isLocked(): bool
     {
         return $this->status === SandboxStatusEnum::Locked;
     }
 
-    /**
-     * Проверить, что песочница сохранена (не коммичена).
-     *
-     * @return bool
-     */
     public function isSaved(): bool
     {
         return $this->status === SandboxStatusEnum::Saved;
     }
 
-    /**
-     * Проверить, что sandbox заблокирован этим пользователем.
-     */
     public function isOwnedBy(int|string $userId): bool
     {
         return $this->isLocked() && (string) $this->user_id === (string) $userId;
     }
 
     /**
-     * Массив для API: status и user_id.
-     *
      * @return array{status: int, user_id: int|string|null}
      */
     public function toStatusArray(): array

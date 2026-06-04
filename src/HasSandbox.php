@@ -9,74 +9,45 @@ use Illuminate\Database\Query\Grammars\Grammar;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Трейт для Eloquent-моделей: параметры Sandbox и логика синхронизации (Laravel-style Has*).
- *
- * Модель задаёт постфикс таблицы (_sb), primary key. Синхронизация active ↔ sandbox
- * делается методами трейта (delete orphans, update, insert). Переключение на sandbox-таблицу
- * — через useSandboxTable() / useActiveTable() или scope sandbox().
+ * Adds sandbox table switching and synchronization to an Eloquent model.
  */
 trait HasSandbox
 {
-    /**
-     * Постфикс имени таблицы sandbox (добавляется к активной таблице).
-     */
     protected static string $sandboxTablePostfix = '_sb';
 
     /**
-     * Имя первичного ключа в sandbox-таблице (null = как у модели).
-     * Для pivot-таблиц можно задать массив колонок: ['term_id', 'category_id'].
-     *
      * @var string|array<int, string>|null
      */
     protected static string|array|null $sandboxPrimaryKey = null;
 
-    /**
-     * Колонка для проверки изменений при update (null = обновлять все совпадающие по key).
-     */
     protected static ?string $sandboxTrackChangeColumn = 'change_date';
 
     /**
-     * Колонка изменений для sync. Переопределите в модели (return null) для таблиц без change_date.
+     * Return null to replace matching rows instead of comparing a change column.
      */
     protected static function getSandboxTrackChangeColumn(): ?string
     {
         return static::$sandboxTrackChangeColumn;
     }
 
-    /**
-     * Использовать ли в текущем контексте sandbox-таблицу для getTableForQuery().
-     * Для переключения таблицы в запросах используйте scope sandbox() / active() либо
-     * переопределите getTable() в модели, вызывая getTableForQuery().
-     */
     protected static bool $useSandboxTable = false;
 
-    /**
-     * Таблица активной области (та же, что getTable() модели без sandbox).
-     */
     public function getActiveTable(): string
     {
         return parent::getTable();
     }
 
-    /**
-     * Таблица для запросов с учётом флага useSandboxTable (для переопределения getTable() в модели).
-     */
     public function getTableForQuery(): string
     {
         return static::$useSandboxTable ? $this->getSandboxTable() : $this->getActiveTable();
     }
 
-    /**
-     * Постфикс таблицы sandbox.
-     */
     public function getSandboxTablePostfix(): string
     {
         return static::$sandboxTablePostfix;
     }
 
     /**
-     * Имя (или имена) первичного ключа для sandbox (та же колонка/колонки, что у модели).
-     *
      * @return string|array<int, string>
      */
     public function getSandboxPrimaryKey(): string|array
@@ -85,8 +56,6 @@ trait HasSandbox
     }
 
     /**
-     * Колонки первичного ключа как массив (для join/where в sync).
-     *
      * @return array<int, string>
      */
     private function getSandboxPrimaryKeyColumns(): array
@@ -96,58 +65,38 @@ trait HasSandbox
         return is_array($key) ? $key : [$key];
     }
 
-    /**
-     * Полное имя sandbox-таблицы (например category_sb).
-     */
     public function getSandboxTable(): string
     {
         return $this->getActiveTable().$this->getSandboxTablePostfix();
     }
 
-    /**
-     * Переключить модель на использование sandbox-таблицы (для последующих запросов).
-     */
     public static function useSandboxTable(): void
     {
         static::$useSandboxTable = true;
     }
 
-    /**
-     * Переключить модель на использование активной таблицы (по умолчанию).
-     */
     public static function useActiveTable(): void
     {
         static::$useSandboxTable = false;
     }
 
-    /**
-     * Проверить, что сейчас используется sandbox-таблица.
-     */
     public static function isUsingSandboxTable(): bool
     {
         return static::$useSandboxTable;
     }
 
-    /**
-     * Scope: запросы к sandbox-таблице (без изменения глобального флага).
-     */
     protected function scopeSandbox(Builder $query): Builder
     {
         return $query->from($this->getSandboxTable());
     }
 
-    /**
-     * Scope: запросы к активной таблице (явно).
-     */
     protected function scopeActive(Builder $query): Builder
     {
         return $query->from($this->getActiveTable());
     }
 
     /**
-     * Синхронизировать данные из активной таблицы в sandbox (для этой модели).
-     * Удаление лишних в sb, обновление изменённых, вставка недостающих.
-     * Поддерживается составной ключ (pivot-таблицы).
+     * Sync the active table into the sandbox table.
      */
     public static function syncIntoSandbox(): void
     {
@@ -165,8 +114,7 @@ trait HasSandbox
     }
 
     /**
-     * Синхронизировать данные из sandbox в активную таблицу (для этой модели).
-     * Поддерживается составной ключ (pivot-таблицы).
+     * Sync the sandbox table into the active table.
      */
     public static function syncIntoActive(): void
     {
@@ -184,8 +132,6 @@ trait HasSandbox
     }
 
     /**
-     * Удалить из целевой таблицы строки, ключей которых нет в исходной.
-     *
      * @param array<int, string> $keyColumns
      */
     private static function deleteOrphansInTarget(string $targetTable, string $sourceTable, array $keyColumns): void
@@ -201,8 +147,6 @@ trait HasSandbox
     }
 
     /**
-     * Обновить в целевой таблице строки, совпадающие по ключу с исходной (или удалить и вставить заново при pivot).
-     *
      * @param array<int, string> $keyColumns
      */
     private static function syncUpdatesFromSourceToTarget(
@@ -277,8 +221,6 @@ trait HasSandbox
     }
 
     /**
-     * Вставить в целевую таблицу строки из исходной, которых ещё нет в целевой по ключу.
-     *
      * @param array<int, string> $keyColumns
      */
     private static function insertMissingIntoTarget(string $targetTable, string $sourceTable, array $keyColumns): void
@@ -297,9 +239,6 @@ trait HasSandbox
     }
 
     /**
-     * Список колонок для синхронизации (по умолчанию — из первой строки таблицы).
-     * Переопределите в модели для явного списка или если таблица пуста.
-     *
      * @return array<int, string>
      */
     protected function getSandboxSyncColumns(): array
@@ -312,9 +251,6 @@ trait HasSandbox
         return array_keys((array) $row);
     }
 
-    /**
-     * Проверить, что модель участвует в Sandbox (использует трейт с параметрами).
-     */
     public static function supportsSandboxSync(): bool
     {
         return true;

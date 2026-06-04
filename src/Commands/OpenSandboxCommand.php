@@ -13,13 +13,6 @@ class OpenSandboxCommand extends Command
 
     protected $description = 'Open a sandbox session for a user';
 
-    /**
-     * Выполнить команду.
-     *
-     * @param Sandbox $sandbox
-     *
-     * @return int
-     */
     public function handle(Sandbox $sandbox): int
     {
         $userId = $this->argument('userId');
