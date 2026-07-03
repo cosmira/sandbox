@@ -22,12 +22,12 @@ class SandboxMiddleware
     {
         $status = SandboxStatus::first();
 
-        if (! $request->isMethodSafe()) {
-            $this->rejectIfOwnedByAnotherUser($request, $status);
+        if ($this->isWriteRequest($request)) {
+            $this->ensureWriteIsAllowed($request, $status);
         }
 
         if ($this->shouldUseSandbox($request, $status)) {
-            Event::dispatch(new ResolvingSandboxModels($request));
+            $this->resolveSandboxModels($request);
         }
 
         return $next($request);
@@ -46,24 +46,48 @@ class SandboxMiddleware
      */
     private function shouldUseSandbox(Request $request, ?SandboxStatus $status): bool
     {
-        return ! $request->isMethodSafe() || $this->sandboxIsActive($status);
+        return $this->isWriteRequest($request) || $this->sandboxIsActive($status);
     }
 
     /**
      * Reject write requests from users that do not own the active sandbox.
      */
-    private function rejectIfOwnedByAnotherUser(Request $request, ?SandboxStatus $status): void
+    private function ensureWriteIsAllowed(Request $request, ?SandboxStatus $status): void
     {
-        $userId = $request->user()?->getAuthIdentifier();
-
         abort_if(
-            ! $this->sandboxIsActive($status)
-                || $status->user_id === null
-                || $userId === null
-                || (string) $status->user_id !== (string) $userId,
+            ! $this->userOwnsActiveSandbox($request, $status),
             403,
             'Only the user that opened the sandbox may modify sandbox data.',
         );
+    }
+
+    /**
+     * Determine if the current request may write into sandbox data.
+     */
+    private function userOwnsActiveSandbox(Request $request, ?SandboxStatus $status): bool
+    {
+        $userId = $request->user()?->getAuthIdentifier();
+
+        return $this->sandboxIsActive($status)
+            && $status->user_id !== null
+            && $userId !== null
+            && (string) $status->user_id === (string) $userId;
+    }
+
+    /**
+     * Resolve the models that should use sandbox tables for this request.
+     */
+    private function resolveSandboxModels(Request $request): void
+    {
+        Event::dispatch(new ResolvingSandboxModels($request));
+    }
+
+    /**
+     * Determine if the request intends to change data.
+     */
+    private function isWriteRequest(Request $request): bool
+    {
+        return ! $request->isMethodSafe();
     }
 
     /**

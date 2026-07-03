@@ -187,29 +187,13 @@ trait HasSandbox
     public static function syncIntoSandbox(): void
     {
         $instance = new static();
-        $activeTable = $instance->getActiveTable();
-        $sandboxTable = $instance->getSandboxTable();
-        $keyColumns = $instance->getSandboxPrimaryKeyColumns();
-        $changeColumn = static::getSandboxTrackChangeColumn();
-        $columns = $instance->getSandboxSyncColumns();
 
-        DB::transaction(function () use (
-            $activeTable,
-            $sandboxTable,
-            $keyColumns,
-            $changeColumn,
-            $columns,
-        ): void {
-            static::synchronizer()->sync(
-                sourceTable: $activeTable,
-                targetTable: $sandboxTable,
-                keyColumns: $keyColumns,
-                columns: $columns,
-                changeColumn: $changeColumn,
-                sourceAlias: 't',
-                targetAlias: 'sb',
-            );
-        });
+        static::syncTables(
+            sourceTable: $instance->getActiveTable(),
+            targetTable: $instance->getSandboxTable(),
+            sourceAlias: 't',
+            targetAlias: 'sb',
+        );
     }
 
     /**
@@ -218,27 +202,41 @@ trait HasSandbox
     public static function syncIntoActive(): void
     {
         $instance = new static();
-        $activeTable = $instance->getActiveTable();
-        $sandboxTable = $instance->getSandboxTable();
-        $keyColumns = $instance->getSandboxPrimaryKeyColumns();
-        $changeColumn = static::getSandboxTrackChangeColumn();
-        $columns = $instance->getSandboxSyncColumns();
+
+        static::syncTables(
+            sourceTable: $instance->getSandboxTable(),
+            targetTable: $instance->getActiveTable(),
+            sourceAlias: 'sb',
+            targetAlias: 't',
+        );
+    }
+
+    /**
+     * Sync rows from one configured model table to another.
+     */
+    private static function syncTables(
+        string $sourceTable,
+        string $targetTable,
+        string $sourceAlias,
+        string $targetAlias,
+    ): void {
+        $instance = new static();
 
         DB::transaction(function () use (
-            $activeTable,
-            $sandboxTable,
-            $keyColumns,
-            $changeColumn,
-            $columns,
+            $sourceTable,
+            $targetTable,
+            $sourceAlias,
+            $targetAlias,
+            $instance,
         ): void {
             static::synchronizer()->sync(
-                sourceTable: $sandboxTable,
-                targetTable: $activeTable,
-                keyColumns: $keyColumns,
-                columns: $columns,
-                changeColumn: $changeColumn,
-                sourceAlias: 'sb',
-                targetAlias: 't',
+                sourceTable: $sourceTable,
+                targetTable: $targetTable,
+                keyColumns: $instance->getSandboxPrimaryKeyColumns(),
+                columns: $instance->getSandboxSyncColumns(),
+                changeColumn: static::getSandboxTrackChangeColumn(),
+                sourceAlias: $sourceAlias,
+                targetAlias: $targetAlias,
             );
         });
     }

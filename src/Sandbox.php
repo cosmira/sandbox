@@ -12,6 +12,7 @@ use Cosmira\Sandbox\Events\SandboxOpened;
 use Cosmira\Sandbox\Events\SandboxResetting;
 use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\Models\SandboxStatus;
+use Cosmira\Sandbox\Support\SandboxRecordRestorer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -292,66 +293,7 @@ class Sandbox
      */
     private function resetSingleRecord(Model $model): void
     {
-        throw_unless(
-            method_exists($model, 'getSandboxTable'),
-            SandboxException::class,
-            'Model '.$model::class.' must use HasSandbox trait for single-record reset.',
-            SandboxException::CODE_MODEL_NOT_REGISTERED,
-        );
-
-        $table = $model->getActiveTable();
-        $sandboxTable = $model->getSandboxTable();
-        $keyName = $model->getSandboxPrimaryKey();
-        $keyColumns = is_array($keyName) ? $keyName : [$keyName];
-        $keyValues = is_array($keyName)
-            ? array_intersect_key($model->getAttributes(), array_flip($keyColumns))
-            : [$keyName => $model->getKey()];
-        $columns = $this->syncColumnsFor($model, $keyColumns);
-
-        if (count($keyValues) !== count($keyColumns) || in_array(null, $keyValues, true)) {
-            return;
-        }
-
-        $row = DB::table($table)->where($keyValues)->first($columns);
-
-        if ($row === null) {
-            DB::table($sandboxTable)->where($keyValues)->delete();
-
-            return;
-        }
-
-        $exists = DB::table($sandboxTable)->where($keyValues)->exists();
-        if ($exists) {
-            $values = array_diff_key((array) $row, array_flip($keyColumns));
-
-            if ($values !== []) {
-                DB::table($sandboxTable)->where($keyValues)->update($values);
-            }
-        } else {
-            DB::table($sandboxTable)->insert((array) $row);
-        }
-    }
-
-    /**
-     * Get the columns used for a single-record sandbox reset.
-     *
-     * @param array<int, string> $keyColumns
-     *
-     * @return array<int, string>
-     */
-    private function syncColumnsFor(Model $model, array $keyColumns): array
-    {
-        throw_unless(
-            method_exists($model, 'getSandboxWritableColumns'),
-            SandboxException::class,
-            'Model '.$model::class.' must expose sandbox writable columns.',
-            SandboxException::CODE_MODEL_NOT_REGISTERED,
-        );
-
-        return array_values(array_unique([
-            ...$keyColumns,
-            ...$model->getSandboxWritableColumns(),
-        ]));
+        app(SandboxRecordRestorer::class)->restore($model);
     }
 
     /**
