@@ -2,18 +2,20 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox\Tests\Integration;
+namespace Cosmira\Sandbox\Tests\Integration;
 
+use Cosmira\Sandbox\Enums\SandboxOperation;
+use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
+use Cosmira\Sandbox\Events\SandboxApplying;
+use Cosmira\Sandbox\Events\SandboxClosed;
+use Cosmira\Sandbox\Events\SandboxResetting;
+use Cosmira\Sandbox\Exceptions\SandboxException;
+use Cosmira\Sandbox\Facades\Sandbox;
+use Cosmira\Sandbox\Models\SandboxStatus;
+use Cosmira\Sandbox\SandboxBuilder;
+use Cosmira\Sandbox\Tests\TestCase;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Event;
-use Packages\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
-use Packages\Sandbox\Events\SandboxApplying;
-use Packages\Sandbox\Events\SandboxClosed;
-use Packages\Sandbox\Events\SandboxResetting;
-use Packages\Sandbox\Exceptions\SandboxException;
-use Packages\Sandbox\Facades\Sandbox;
-use Packages\Sandbox\Models\SandboxStatus;
-use Packages\Sandbox\SandboxBuilder;
-use Packages\Sandbox\Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 
 final class FluentInterfaceTest extends TestCase
@@ -92,7 +94,7 @@ final class FluentInterfaceTest extends TestCase
 
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Free, $status->status);
-        $this->assertEquals(0, $status->last_operation);
+        $this->assertEquals(SandboxOperation::Rollback, $status->last_operation);
 
         // Resetting is requested once on open and once on rollback.
         Event::assertDispatchedTimes(SandboxResetting::class, 2);
@@ -108,7 +110,7 @@ final class FluentInterfaceTest extends TestCase
 
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Saved, $status->status);
-        $this->assertEquals(2, $status->last_operation);
+        $this->assertEquals(SandboxOperation::Save, $status->last_operation);
 
         // Saving keeps sandbox data as-is.
         Event::assertDispatchedTimes(SandboxResetting::class, 1);
@@ -124,6 +126,28 @@ final class FluentInterfaceTest extends TestCase
         $this->assertNotNull($status);
         $this->assertEquals(SandboxStatusEnum::Locked, $status->status);
         $this->assertEquals(1, $status->user_id);
+    }
+
+    #[Test]
+    public function fluentBuilderExposesItsUserAndSandboxInstance(): void
+    {
+        $builder = Sandbox::for(1);
+
+        $this->assertSame(1, $builder->getUserId());
+        $this->assertInstanceOf(\Cosmira\Sandbox\Sandbox::class, $builder->getSandbox());
+    }
+
+    #[Test]
+    public function fluentBuilderCanApplyAndResetModels(): void
+    {
+        BuilderResetModelStub::$synced = 0;
+
+        $applyBuilder = Sandbox::for(1)->apply(BuilderResetModelStub::class);
+        $resetBuilder = Sandbox::for(1)->reset(BuilderResetModelStub::class);
+
+        $this->assertInstanceOf(SandboxBuilder::class, $applyBuilder);
+        $this->assertInstanceOf(SandboxBuilder::class, $resetBuilder);
+        $this->assertSame(2, BuilderResetModelStub::$synced);
     }
 
     #[Test]
@@ -149,7 +173,7 @@ final class FluentInterfaceTest extends TestCase
         Event::fake([SandboxResetting::class]);
 
         // Old API
-        app(\Packages\Sandbox\Sandbox::class)->open(1);
+        app(\Cosmira\Sandbox\Sandbox::class)->open(1);
 
         $status1 = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Locked, $status1->status);
@@ -160,7 +184,7 @@ final class FluentInterfaceTest extends TestCase
         $oldUserId = $status1->user_id;
 
         // Close for next test
-        app(\Packages\Sandbox\Sandbox::class)->close(1, 0); // rollback
+        app(\Cosmira\Sandbox\Sandbox::class)->close(1, SandboxOperation::Rollback);
 
         // New fluent API
         Sandbox::for(2)->open();
@@ -197,5 +221,15 @@ final class FluentInterfaceTest extends TestCase
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Locked, $status->status);
         $this->assertEquals(2, $status->user_id);
+    }
+}
+
+class BuilderResetModelStub extends Model
+{
+    public static int $synced = 0;
+
+    public static function syncIntoSandbox(): void
+    {
+        self::$synced++;
     }
 }

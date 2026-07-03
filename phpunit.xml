@@ -8,7 +8,15 @@
          stopOnError="false"
          executionOrder="random"
          defaultTestSuite="Main"
-         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.0/phpunit.xsd">
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/12.0/phpunit.xsd">
+    <source>
+        <include>
+            <directory suffix=".php">./src</directory>
+        </include>
+        <exclude>
+            <file>./src/Commands/BenchmarkSyncCommand.php</file>
+        </exclude>
+    </source>
     <testsuites>
         <testsuite name="Main">
             <directory suffix="Test.php">./tests</directory>

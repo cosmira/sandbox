@@ -2,13 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox\Tests\Unit;
+namespace Cosmira\Sandbox\Tests\Unit;
 
+use Cosmira\Sandbox\HasSandbox;
+use Cosmira\Sandbox\Sandbox;
+use Cosmira\Sandbox\Tests\TestCase;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Packages\Sandbox\HasSandbox;
-use Packages\Sandbox\Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 
 final class HasSandboxCompositeKeyTest extends TestCase
@@ -47,8 +48,18 @@ final class HasSandboxCompositeKeyTest extends TestCase
         PivotModelStub::syncIntoSandbox();
 
         $this->assertSame(2, DB::table('test_pivot_sb')->count());
-        $this->assertSame('v1', DB::table('test_pivot_sb')->where(['a' => 'x', 'b' => 'y'])->value('value'));
-        $this->assertSame('v2', DB::table('test_pivot_sb')->where(['a' => 'p', 'b' => 'q'])->value('value'));
+        $this->assertSame(
+            'v1',
+            DB::table('test_pivot_sb')
+                ->where(['a' => 'x', 'b' => 'y'])
+                ->value('value'),
+        );
+        $this->assertSame(
+            'v2',
+            DB::table('test_pivot_sb')
+                ->where(['a' => 'p', 'b' => 'q'])
+                ->value('value'),
+        );
     }
 
     #[Test]
@@ -60,7 +71,12 @@ final class HasSandboxCompositeKeyTest extends TestCase
         PivotModelStub::syncIntoSandbox();
 
         $this->assertSame(1, DB::table('test_pivot_sb')->count());
-        $this->assertNotInstanceOf(\stdClass::class, DB::table('test_pivot_sb')->where(['a' => 'orphan', 'b' => 'sb'])->first());
+        $this->assertNotInstanceOf(
+            \stdClass::class,
+            DB::table('test_pivot_sb')
+                ->where(['a' => 'orphan', 'b' => 'sb'])
+                ->first(),
+        );
     }
 
     #[Test]
@@ -71,7 +87,12 @@ final class HasSandboxCompositeKeyTest extends TestCase
         PivotModelStub::syncIntoActive();
 
         $this->assertSame(1, DB::table('test_pivot')->count());
-        $this->assertSame('from_sb', DB::table('test_pivot')->where(['a' => 'x', 'b' => 'y'])->value('value'));
+        $this->assertSame(
+            'from_sb',
+            DB::table('test_pivot')
+                ->where(['a' => 'x', 'b' => 'y'])
+                ->value('value'),
+        );
     }
 
     #[Test]
@@ -81,6 +102,46 @@ final class HasSandboxCompositeKeyTest extends TestCase
         $key = $model->getSandboxPrimaryKey();
         $this->assertIsArray($key);
         $this->assertSame(['a', 'b'], $key);
+    }
+
+    #[Test]
+    public function resetSingleRecordReturnsWhenCompositeKeyIsIncomplete(): void
+    {
+        DB::table('test_pivot_sb')->insert(['a' => 'x', 'b' => 'y', 'value' => 'old']);
+
+        $model = new PivotModelStub();
+        $model->a = 'x';
+
+        app(Sandbox::class)->resetSandboxData($model);
+
+        $this->assertSame(1, DB::table('test_pivot_sb')->count());
+        $this->assertSame(
+            'old',
+            DB::table('test_pivot_sb')
+                ->where(['a' => 'x', 'b' => 'y'])
+                ->value('value'),
+        );
+    }
+
+    #[Test]
+    public function resetSingleRecordUsesOnlyCompositeKeyColumnsForLookup(): void
+    {
+        DB::table('test_pivot')->insert(['a' => 'x', 'b' => 'y', 'value' => 'fresh']);
+        DB::table('test_pivot_sb')->insert(['a' => 'x', 'b' => 'y', 'value' => 'stale']);
+
+        $model = new PivotModelStub();
+        $model->a = 'x';
+        $model->b = 'y';
+        $model->value = 'stale';
+
+        app(Sandbox::class)->resetSandboxData($model);
+
+        $this->assertSame(
+            'fresh',
+            DB::table('test_pivot_sb')
+                ->where(['a' => 'x', 'b' => 'y'])
+                ->value('value'),
+        );
     }
 }
 

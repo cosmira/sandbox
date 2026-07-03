@@ -2,12 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox\Tests\Integration;
+namespace Cosmira\Sandbox\Tests\Integration;
 
-use Packages\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
-use Packages\Sandbox\Models\SandboxStatus;
-use Packages\Sandbox\Sandbox;
-use Packages\Sandbox\Tests\TestCase;
+use Carbon\Carbon;
+use Cosmira\Sandbox\Enums\SandboxOperation;
+use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
+use Cosmira\Sandbox\Models\SandboxStatus;
+use Cosmira\Sandbox\Sandbox;
+use Cosmira\Sandbox\Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 
 /**
@@ -64,7 +66,7 @@ final class CommandsTest extends TestCase
         // Then close with commit
         $this->artisan('sandbox:close', [
             'userId'   => '1',
-            '--result' => '1',
+            '--result' => 'commit',
         ])
             ->assertSuccessful()
             ->expectsOutput('Sandbox closed with result: commit');
@@ -80,7 +82,7 @@ final class CommandsTest extends TestCase
 
         $this->artisan('sandbox:close', [
             'userId'   => '1',
-            '--result' => '0',
+            '--result' => 'rollback',
         ])
             ->assertSuccessful()
             ->expectsOutput('Sandbox closed with result: rollback');
@@ -96,13 +98,29 @@ final class CommandsTest extends TestCase
 
         $this->artisan('sandbox:close', [
             'userId'   => '1',
-            '--result' => '2',
+            '--result' => 'save',
         ])
             ->assertSuccessful()
             ->expectsOutput('Sandbox closed with result: save');
 
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Saved, $status->status);
+    }
+
+    #[Test]
+    public function closeCommandAcceptsLegacyNumericResult(): void
+    {
+        app(Sandbox::class)->open(1);
+
+        $this->artisan('sandbox:close', [
+            'userId'   => '1',
+            '--result' => '1',
+        ])
+            ->assertSuccessful()
+            ->expectsOutput('Sandbox closed with result: commit');
+
+        $status = SandboxStatus::first();
+        $this->assertEquals(SandboxStatusEnum::Free, $status->status);
     }
 
     #[Test]
@@ -125,14 +143,79 @@ final class CommandsTest extends TestCase
     }
 
     #[Test]
-    public function canCheckStatusVerbose(): void
+    public function canCheckSavedStatusViaCommand(): void
     {
         app(Sandbox::class)->open(1);
+        app(Sandbox::class)->close(1, SandboxOperation::Save);
+
+        $this->artisan('sandbox:status')
+            ->assertSuccessful()
+            ->expectsOutput('Sandbox is SAVED (user: 1)');
+    }
+
+    #[Test]
+    public function statusCommandFailsWhenStatusRowIsMissing(): void
+    {
+        \DB::table('sandbox_status')->delete();
+
+        $this->artisan('sandbox:status')
+            ->assertFailed()
+            ->expectsOutput('Sandbox status not found in database');
+    }
+
+    #[Test]
+    public function canCheckStatusVerbose(): void
+    {
+        $changedAt = Carbon::parse('2026-01-02 03:04:05');
+        $sentAt = Carbon::parse('2026-01-03 04:05:06');
+
+        SandboxStatus::query()->update([
+            'status'         => SandboxStatusEnum::Locked,
+            'user_id'        => 1,
+            'last_operation' => SandboxOperation::Commit,
+            'change_date'    => $changedAt,
+            'send_date'      => $sentAt,
+            'note'           => 'Ready to inspect',
+        ]);
 
         $this->artisan('sandbox:status', ['--details' => true])
             ->assertSuccessful()
             ->expectsOutput('Sandbox is LOCKED by user: 1')
-            ->expectsOutput('Detailed Information:');
+            ->expectsOutput('Detailed Information:')
+            ->expectsTable(['Key', 'Value'], [
+                ['Status Code', 'Locked'],
+                ['User ID', 1],
+                ['Last Operation', 'Commit'],
+                ['Changed At', '2026-01-02 03:04:05'],
+                ['Sent At', '2026-01-03 04:05:06'],
+                ['Note', 'Ready to inspect'],
+            ]);
+    }
+
+    #[Test]
+    public function statusDetailsUseFallbacksForEmptyValues(): void
+    {
+        $changedAt = Carbon::parse('2026-01-02 03:04:05');
+
+        SandboxStatus::query()->update([
+            'status'         => SandboxStatusEnum::Free,
+            'user_id'        => null,
+            'last_operation' => null,
+            'change_date'    => $changedAt,
+            'send_date'      => null,
+            'note'           => null,
+        ]);
+
+        $this->artisan('sandbox:status', ['--details' => true])
+            ->assertSuccessful()
+            ->expectsTable(['Key', 'Value'], [
+                ['Status Code', 'Free'],
+                ['User ID', 'N/A'],
+                ['Last Operation', 'N/A'],
+                ['Changed At', '2026-01-02 03:04:05'],
+                ['Sent At', 'N/A'],
+                ['Note', 'N/A'],
+            ]);
     }
 
     #[Test]
@@ -145,7 +228,28 @@ final class CommandsTest extends TestCase
             '--result' => '99',
         ])
             ->assertFailed()
-            ->expectsOutput('Result code must be 0 (rollback), 1 (commit), or 2 (save)');
+            ->expectsOutput('Result must be rollback, commit, or save');
+    }
+
+    #[Test]
+    public function closeCommandFailsWithoutAuthAndNoUserId(): void
+    {
+        $this->artisan('sandbox:close')
+            ->assertFailed()
+            ->expectsOutput('No user specified and no authenticated user found');
+    }
+
+    #[Test]
+    public function closeCommandReportsSandboxErrors(): void
+    {
+        app(Sandbox::class)->open(1);
+
+        $this->artisan('sandbox:close', [
+            'userId'   => '2',
+            '--result' => 'commit',
+        ])
+            ->assertFailed()
+            ->expectsOutput('Failed to close sandbox: Sandbox is locked by other user 1');
     }
 
     #[Test]
@@ -177,5 +281,17 @@ final class CommandsTest extends TestCase
 
         $status = SandboxStatus::first();
         $this->assertEquals('Testing sandbox', $status->note);
+    }
+
+    #[Test]
+    public function openCommandReportsSandboxErrors(): void
+    {
+        app(Sandbox::class)->open(1);
+
+        $this->artisan('sandbox:open', [
+            'userId' => '2',
+        ])
+            ->assertFailed()
+            ->expectsOutput('Failed to open sandbox: Sandbox is locked by other user 1');
     }
 }

@@ -2,14 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox\Tests\Integration;
+namespace Cosmira\Sandbox\Tests\Integration;
 
+use Cosmira\Sandbox\Enums\SandboxOperation;
+use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
+use Cosmira\Sandbox\Exceptions\SandboxException;
+use Cosmira\Sandbox\Models\SandboxStatus;
+use Cosmira\Sandbox\Sandbox;
+use Cosmira\Sandbox\Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Packages\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
-use Packages\Sandbox\Exceptions\SandboxException;
-use Packages\Sandbox\Models\SandboxStatus;
-use Packages\Sandbox\Sandbox;
-use Packages\Sandbox\Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 
 final class SandboxExceptionHandlingTest extends TestCase
@@ -52,12 +53,12 @@ final class SandboxExceptionHandlingTest extends TestCase
         ]);
 
         $this->expectException(SandboxException::class);
-        $this->sandbox->close(1, 0);
+        $this->sandbox->close(1, SandboxOperation::Rollback);
     }
 
     /**
      * Test that other user cannot close sandbox locked by someone else.
-     * Verifies user ID comparison and locking logic (with non-zero result).
+     * Verifies user ID comparison and locking logic for commit operations.
      */
     #[Test]
     public function otherUserCannotCloseLockedSandbox(): void
@@ -70,17 +71,15 @@ final class SandboxExceptionHandlingTest extends TestCase
             'user_id' => 1,
         ]);
 
-        // result=1 (commit) triggers the user lock check
         $this->expectException(SandboxException::class);
-        $this->sandbox->close(2, 1);
+        $this->sandbox->close(2, SandboxOperation::Commit);
     }
 
     /**
-     * Test that result=0 does not trigger user lock exception.
-     * Verifies the && $result !== 0 condition.
+     * Test that rollback does not trigger user lock exception.
      */
     #[Test]
-    public function closingWithZeroResultIgnoresUserLock(): void
+    public function closingWithRollbackIgnoresUserLock(): void
     {
         $this->createDatabaseUser(1);
         $this->createDatabaseUser(2);
@@ -90,8 +89,7 @@ final class SandboxExceptionHandlingTest extends TestCase
             'user_id' => 1,
         ]);
 
-        // Should NOT throw because result is 0
-        $this->sandbox->close(2, 0);
+        $this->sandbox->close(2, SandboxOperation::Rollback);
 
         $status = SandboxStatus::first();
         $this->assertSame(SandboxStatusEnum::Free, $status->status);
@@ -109,7 +107,7 @@ final class SandboxExceptionHandlingTest extends TestCase
         ]);
 
         // Should NOT throw - int 1 casts to string '1'
-        $this->sandbox->close(1, 0);
+        $this->sandbox->close(1, SandboxOperation::Rollback);
 
         $status = SandboxStatus::first();
         $this->assertSame(SandboxStatusEnum::Free, $status->status);
@@ -178,7 +176,7 @@ final class SandboxExceptionHandlingTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $this->sandbox->close(1, SandboxStatusEnum::Saved->value, note: 'Closing note');
+        $this->sandbox->close(1, SandboxOperation::Save, note: 'Closing note');
 
         $status = SandboxStatus::first();
         $this->assertSame('Closing note', $status->note);

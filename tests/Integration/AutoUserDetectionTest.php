@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox\Tests\Integration;
+namespace Cosmira\Sandbox\Tests\Integration;
 
-use Packages\Sandbox\Facades\Sandbox;
-use Packages\Sandbox\Tests\TestCase;
+use Cosmira\Sandbox\Facades\Sandbox;
+use Cosmira\Sandbox\Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 
 class AutoUserDetectionTest extends TestCase
@@ -100,7 +100,7 @@ class AutoUserDetectionTest extends TestCase
 
         Sandbox::for(222)->open();
 
-        $this->artisan('sandbox:close', ['userId' => '222', '--result' => 1])
+        $this->artisan('sandbox:close', ['userId' => '222', '--result' => 'commit'])
             ->assertSuccessful();
 
         $this->assertSandboxFree();

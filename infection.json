@@ -5,6 +5,7 @@
             "src"
         ],
         "excludes": [
+            "SandboxServiceProvider.php",
             "Testing/SandboxTestHelpers.php"
         ]
     },
@@ -22,11 +23,11 @@
         "ProtectedVisibility": false
     },
     "testFramework": "phpunit",
-    "testFrameworkOptions": "--order-by=default --exclude-group=commands",
+    "testFrameworkOptions": "--order-by=default",
     "initialTestsPhpOptions": "-d pcov.directory=.",
     "phpUnit": {
         "configDir": "."
     },
-    "minMsi": 70,
-    "minCoveredMsi": 75
+    "minMsi": 90,
+    "minCoveredMsi": 90
 }

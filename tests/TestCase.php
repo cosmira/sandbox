@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox\Tests;
+namespace Cosmira\Sandbox\Tests;
 
+use Cosmira\Sandbox\SandboxServiceProvider;
+use Cosmira\Sandbox\Testing\SandboxTestHelpers;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Orchestra\Testbench\TestCase as BaseTestCase;
-use Packages\Sandbox\SandboxServiceProvider;
-use Packages\Sandbox\Testing\SandboxTestHelpers;
 
 class TestUser extends Model implements Authenticatable
 {

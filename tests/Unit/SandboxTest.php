@@ -2,20 +2,21 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox\Tests\Unit;
+namespace Cosmira\Sandbox\Tests\Unit;
 
 use Carbon\Carbon;
+use Cosmira\Sandbox\Enums\SandboxOperation;
+use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
+use Cosmira\Sandbox\Events\SandboxApplying;
+use Cosmira\Sandbox\Events\SandboxClosed;
+use Cosmira\Sandbox\Events\SandboxOpened;
+use Cosmira\Sandbox\Events\SandboxResetting;
+use Cosmira\Sandbox\Exceptions\SandboxException;
+use Cosmira\Sandbox\Models\SandboxStatus;
+use Cosmira\Sandbox\Sandbox;
+use Cosmira\Sandbox\Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
-use Packages\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
-use Packages\Sandbox\Events\SandboxApplying;
-use Packages\Sandbox\Events\SandboxClosed;
-use Packages\Sandbox\Events\SandboxOpened;
-use Packages\Sandbox\Events\SandboxResetting;
-use Packages\Sandbox\Exceptions\SandboxException;
-use Packages\Sandbox\Models\SandboxStatus;
-use Packages\Sandbox\Sandbox;
-use Packages\Sandbox\Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 
 final class SandboxTest extends TestCase
@@ -122,18 +123,18 @@ final class SandboxTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $this->sandbox->close(1, result: 0);
+        $this->sandbox->close(1, result: SandboxOperation::Rollback);
 
         Event::assertDispatched(SandboxResetting::class);
         Event::assertDispatched(SandboxClosed::class, function (SandboxClosed $event) {
             return $event->userId === 1
-                && $event->result === 0
+                && $event->result === SandboxOperation::Rollback
                 && $event->note === null
                 && $event->asyncUpdater === false;
         });
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Free, $status->status);
-        $this->assertEquals(0, $status->last_operation);
+        $this->assertEquals(SandboxOperation::Rollback, $status->last_operation);
     }
 
     #[Test]
@@ -143,22 +144,24 @@ final class SandboxTest extends TestCase
 
         $this->createDatabaseUser(1);
         SandboxStatus::factory()->create([
-            'status'  => SandboxStatusEnum::Locked,
-            'user_id' => 1,
+            'status'    => SandboxStatusEnum::Locked,
+            'user_id'   => 1,
+            'change_id' => 4,
         ]);
 
-        $this->sandbox->close(1, result: 1, asyncUpdater: false);
+        $this->sandbox->close(1, result: SandboxOperation::Commit, asyncUpdater: false);
 
         Event::assertDispatched(SandboxApplying::class);
         Event::assertDispatched(SandboxClosed::class, function (SandboxClosed $e) {
             return $e->userId === 1
-                && $e->result === 1
+                && $e->result === SandboxOperation::Commit
                 && $e->note === null
                 && $e->asyncUpdater === false;
         });
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Free, $status->status);
-        $this->assertEquals(1, $status->last_operation);
+        $this->assertEquals(SandboxOperation::Commit, $status->last_operation);
+        $this->assertSame(5, $status->change_id);
         $this->assertInstanceOf(Carbon::class, $status->send_date);
     }
 
@@ -169,22 +172,24 @@ final class SandboxTest extends TestCase
 
         $this->createDatabaseUser(1);
         SandboxStatus::factory()->create([
-            'status'  => SandboxStatusEnum::Locked,
-            'user_id' => 1,
+            'status'    => SandboxStatusEnum::Locked,
+            'user_id'   => 1,
+            'change_id' => 4,
         ]);
 
-        $this->sandbox->close(1, result: 2);
+        $this->sandbox->close(1, result: SandboxOperation::Save);
 
         Event::assertNotDispatched(SandboxApplying::class);
         Event::assertDispatched(SandboxClosed::class, function (SandboxClosed $event) {
             return $event->userId === 1
-                && $event->result === 2
+                && $event->result === SandboxOperation::Save
                 && $event->note === null
                 && $event->asyncUpdater === false;
         });
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Saved, $status->status);
-        $this->assertEquals(2, $status->last_operation);
+        $this->assertEquals(SandboxOperation::Save, $status->last_operation);
+        $this->assertSame(5, $status->change_id);
     }
 
     #[Test]
@@ -197,7 +202,7 @@ final class SandboxTest extends TestCase
         $this->expectException(SandboxException::class);
         $this->expectExceptionCode(20626);
 
-        $this->sandbox->close(1, result: 1);
+        $this->sandbox->close(1, result: SandboxOperation::Commit);
     }
 
     #[Test]
@@ -230,6 +235,43 @@ final class SandboxTest extends TestCase
         $this->assertInstanceOf(SandboxStatus::class, $status);
         $this->assertTrue($status->isOwnedBy(1));
         $this->assertFalse($status->isOwnedBy(2));
+    }
+
+    #[Test]
+    public function itComparesOwnerIdsByStringValue(): void
+    {
+        $status = new SandboxStatus([
+            'status'  => SandboxStatusEnum::Locked,
+            'user_id' => 1,
+        ]);
+
+        $this->assertTrue($status->isOwnedBy('1'));
+    }
+
+    #[Test]
+    public function itOpensForSameOwnerWhenStoredIdTypeDiffers(): void
+    {
+        Event::fake([SandboxResetting::class, SandboxOpened::class]);
+
+        $this->createDatabaseUser(1);
+        SandboxStatus::factory()->create([
+            'status'  => SandboxStatusEnum::Locked,
+            'user_id' => 1,
+        ]);
+
+        $this->sandbox->open('1');
+
+        Event::assertNotDispatched(SandboxResetting::class);
+        Event::assertDispatched(SandboxOpened::class);
+    }
+
+    #[Test]
+    public function factoryCreatesTheSingletonStatusRow(): void
+    {
+        $status = SandboxStatus::factory()->make();
+
+        $this->assertSame(1, $status->id);
+        $this->assertSame(0, $status->change_id);
     }
 
     #[Test]

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox\Tests\Unit;
+namespace Cosmira\Sandbox\Tests\Unit;
 
-use Packages\Sandbox\Exceptions\SandboxException;
-use Packages\Sandbox\Sandbox;
-use Packages\Sandbox\Tests\TestCase;
+use Cosmira\Sandbox\Exceptions\SandboxException;
+use Cosmira\Sandbox\Sandbox;
+use Cosmira\Sandbox\Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 
 final class SandboxResetApplyTest extends TestCase

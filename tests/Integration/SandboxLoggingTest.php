@@ -2,15 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox\Tests\Integration;
+namespace Cosmira\Sandbox\Tests\Integration;
 
+use Cosmira\Sandbox\Enums\SandboxOperation;
+use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
+use Cosmira\Sandbox\Exceptions\SandboxException;
+use Cosmira\Sandbox\Models\SandboxStatus;
+use Cosmira\Sandbox\Sandbox;
+use Cosmira\Sandbox\Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
-use Packages\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
-use Packages\Sandbox\Exceptions\SandboxException;
-use Packages\Sandbox\Models\SandboxStatus;
-use Packages\Sandbox\Sandbox;
-use Packages\Sandbox\Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 
 final class SandboxLoggingTest extends TestCase
@@ -53,10 +54,15 @@ final class SandboxLoggingTest extends TestCase
             'user_id' => null,
         ]);
 
-        // Just verify it doesn't throw - logging happens internally
+        Log::shouldReceive('debug')
+            ->once()
+            ->with('Opening sandbox', ['user_id' => 1]);
+        Log::shouldReceive('info')
+            ->once()
+            ->with('Sandbox opened', ['user_id' => 1]);
+
         $this->sandbox->open(1);
 
-        // Verify sandbox was opened
         $status = SandboxStatus::first();
         $this->assertSame(SandboxStatusEnum::Locked, $status->status);
         $this->assertSame('1', $status->user_id);
@@ -75,16 +81,27 @@ final class SandboxLoggingTest extends TestCase
             'user_id' => 1,
         ]);
 
-        // Just verify it doesn't throw - logging happens internally
-        $this->sandbox->close(1, SandboxStatusEnum::Saved->value);
+        Log::shouldReceive('debug')
+            ->once()
+            ->with('Closing sandbox', [
+                'user_id' => 1,
+                'result'  => 'save',
+            ]);
+        Log::shouldReceive('info')
+            ->once()
+            ->with('Sandbox closed', [
+                'user_id' => 1,
+                'result'  => 'save',
+            ]);
 
-        // Verify sandbox was closed
+        $this->sandbox->close(1, SandboxOperation::Save);
+
         $status = SandboxStatus::first();
         $this->assertSame(SandboxStatusEnum::Saved, $status->status);
     }
 
     /**
-     * Test that closing with different result codes works (verifies result parameter is used).
+     * Test that closing with a different result works (verifies result parameter is used).
      */
     #[Test]
     public function closingSandboxWithDifferentResults(): void
@@ -95,8 +112,7 @@ final class SandboxLoggingTest extends TestCase
             'user_id' => 1,
         ]);
 
-        // Close with Free (0) result
-        $this->sandbox->close(1, SandboxStatusEnum::Free->value);
+        $this->sandbox->close(1, SandboxOperation::Rollback);
 
         $status = SandboxStatus::first();
         $this->assertSame(SandboxStatusEnum::Free, $status->status);

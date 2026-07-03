@@ -4,26 +4,59 @@
 [![Tests](https://github.com/cosmira/sandbox/actions/workflows/phpunit.yml/badge.svg)](https://github.com/cosmira/sandbox/actions/workflows/phpunit.yml)
 [![Code Coverage](https://github.com/cosmira/sandbox/actions/workflows/coverage.yml/badge.svg)](https://github.com/cosmira/sandbox/actions/workflows/coverage.yml)
 
-Laravel-пакет для редактирования конфигурации в песочнице: пользователь меняет sandbox-копию данных, а приложение затем откатывает, коммитит или сохраняет сессию без коммита.
+Laravel-пакет для редактирования конфигурации в песочнице. Один пользователь
+берёт управление конфигурацией на себя, приложение переводит выбранные модели
+на sandbox-таблицы через middleware и событие, а завершение всегда происходит
+явно: применить изменения, откатить их или сохранить черновик.
 
 У каждой sandbox-модели две таблицы:
 
 - активная таблица, например `category`
-- sandbox-таблица, по умолчанию активная таблица + `_sb`, например `category_sb`
+- sandbox-таблица, по умолчанию активная таблица + `_sb`, например
+  `category_sb`
 
 В пакете есть две отдельные части:
 
-- **объект песочницы** управляет сессией: открывает, закрывает, применяет результат, хранит статус и выбрасывает события
-- **модели с `HasSandbox`** умеют явно работать с active/sandbox-таблицами и синхронизировать данные между ними
+- **объект песочницы** управляет сессией: открывает, закрывает, применяет
+  результат, хранит статус и выбрасывает события
+- **модели с `HasSandbox`** умеют явно работать с active/sandbox-таблицами и
+  синхронизировать данные между ними
 
-Сам объект песочницы не переключает модели и не копирует данные между таблицами напрямую. Это делает приложение в слушателях событий.
+Открытие и закрытие песочницы управляют только lifecycle. Приложение решает,
+какие модели участвуют в sandbox, а пакет помогает безопасно переключить их
+через middleware и события.
+
+## Сценарий Конфигурации
+
+Пакет рассчитан на workflow, где конфигурацию может менять только один
+пользователь за раз:
+
+1. Пользователь нажимает "Редактировать" и вызывает `Sandbox::me()->open()`.
+2. Sandbox получает владельца и блокирует конфигурацию для остальных.
+3. Маршруты конфигурации проходят через middleware `sandbox`.
+4. Middleware проверяет, что изменяющий запрос делает владелец sandbox.
+5. Middleware диспатчит `ResolvingSandboxModels`.
+6. Приложение слушает событие и выбирает модели через `$event->models(...)`.
+7. Эти модели начинают читать и писать через sandbox-таблицы.
+8. Остальные пользователи видят, кто сейчас редактирует конфигурацию.
+9. Чужие `POST`, `PUT`, `PATCH` и `DELETE` получают `403`.
+10. Владелец вручную завершает работу через `commit()`, `rollback()` или `save()`.
+
+Важно: `open()` не копирует active-данные в sandbox. Открытие только берёт
+блокировку. Синхронизация происходит в конце: `commit()` применяет sandbox в
+active, `rollback()` возвращает sandbox к active, а `save()` оставляет черновик
+и не снимает блокировку.
+
+Middleware тоже не открывает, не коммитит и не откатывает sandbox. Оно только
+проверяет доступ и на время запроса включает sandbox-таблицы для моделей,
+которые приложение выбрало в `ResolvingSandboxModels`.
 
 ## Объект Песочницы
 
 Основной способ работы — facade builder:
 
 ```php
-use Packages\Sandbox\Facades\Sandbox;
+use Cosmira\Sandbox\Facades\Sandbox;
 
 Sandbox::for($userId)->open(note: 'Editing categories');
 
@@ -42,14 +75,17 @@ Sandbox::me()->rollback();
 Методы builder:
 
 - `open(force: false, note: null)` — открыть сессию
-- `commit(note: null, asyncUpdater: true)` — применить sandbox-данные в active через события
+- `commit(note: null, asyncUpdater: true)` — применить sandbox-данные в active
+  через события
 - `rollback(note: null)` — отменить изменения через события
 - `save(note: null)` — оставить sandbox-данные без применения
 - `reset($modelOrClass)` — явно обновить sandbox-данные модели из active
 - `apply($modelOrClass)` — то же самое, alias для `reset()`
 - `status()` — получить текущий статус
 
-Объект песочницы отвечает только за lifecycle и события. Например, при `commit()` он диспатчит `SandboxApplying`, но сами модели синхронизируются в слушателе.
+Объект песочницы отвечает только за lifecycle и события. Например, при
+`commit()` он диспатчит `SandboxApplying`, но сами модели синхронизируются
+в слушателе.
 
 ## Результаты Сессии
 
@@ -57,45 +93,39 @@ Sandbox::me()->rollback();
 
 | Метод | Что делает объект песочницы | События |
 | --- | --- | --- |
-| `rollback()` | Освобождает сессию после отката | `SandboxResetting`, затем `SandboxClosed` |
-| `commit()` | Освобождает сессию после применения | `SandboxApplying`, затем `SandboxClosed` |
+| `rollback()` | Освобождает сессию после отката | `SandboxResetting`, `SandboxClosed` |
+| `commit()` | Освобождает сессию после применения | `SandboxApplying`, `SandboxClosed` |
 | `save()` | Сохраняет sandbox-состояние без применения | `SandboxClosed` |
 
 Открытие диспатчит:
 
-- `SandboxResetting`, когда active-данные нужно скопировать в sandbox
+- `SandboxResetting`, для приложений, которым нужен eager refresh sandbox
 - `SandboxOpened`, когда статус уже переведён в `Locked`
 
-Если песочница заблокирована другим пользователем, `open()` выбросит `SandboxException`. Для принудительного открытия используйте `force: true`.
+В типичном configuration workflow не нужно копировать active-данные в sandbox
+при открытии. Пользователь продолжает работать с текущим sandbox-состоянием,
+а синхронизация выполняется явно при завершении: `commit()` применяет sandbox
+в active, `rollback()` откатывает sandbox из active.
+
+Если песочница заблокирована другим пользователем, `open()` выбросит
+`SandboxException`. Для принудительного открытия используйте `force: true`.
 
 ## Слушатели Событий
 
-Регистрируйте слушатели в service provider приложения. В них вы решаете, какие модели переключить, синхронизировать или вернуть обратно.
+Регистрируйте слушатели в service provider приложения. В них вы решаете, какие
+модели переключить, синхронизировать или вернуть обратно.
 
 ```php
 use Illuminate\Support\Facades\Event;
-use Packages\Sandbox\Events\SandboxApplying;
-use Packages\Sandbox\Events\SandboxClosed;
-use Packages\Sandbox\Events\SandboxOpened;
-use Packages\Sandbox\Events\SandboxResetting;
+use Cosmira\Sandbox\Enums\SandboxOperation;
+use Cosmira\Sandbox\Events\SandboxApplying;
+use Cosmira\Sandbox\Events\SandboxClosed;
 
 $models = [
     Category::class,
     Product::class,
     Term::class,
 ];
-
-Event::listen(SandboxOpened::class, function (SandboxOpened $event) use ($models): void {
-    foreach ($models as $model) {
-        $model::useSandboxTable();
-    }
-});
-
-Event::listen(SandboxResetting::class, function () use ($models): void {
-    foreach ($models as $model) {
-        $model::syncIntoSandbox();
-    }
-});
 
 Event::listen(SandboxApplying::class, function () use ($models): void {
     foreach ($models as $model) {
@@ -104,8 +134,16 @@ Event::listen(SandboxApplying::class, function () use ($models): void {
 });
 
 Event::listen(SandboxClosed::class, function (SandboxClosed $event) use ($models): void {
-    foreach ($models as $model) {
-        $model::useActiveTable();
+    if ($event->result === SandboxOperation::Rollback) {
+        foreach ($models as $model) {
+            $model::syncIntoSandbox();
+        }
+    }
+
+    if ($event->result !== SandboxOperation::Save) {
+        foreach ($models as $model) {
+            $model::useActiveTable();
+        }
     }
 
     if ($event->asyncUpdater) {
@@ -114,20 +152,27 @@ Event::listen(SandboxClosed::class, function (SandboxClosed $event) use ($models
 });
 ```
 
+Если приложение всё же хочет обновлять sandbox при каждом открытии, можно
+слушать `SandboxResetting` и вызывать `syncIntoSandbox()`. Для
+конфигурационного сценария обычно удобнее делать это только при rollback,
+чтобы открытие sandbox не перетирало текущий черновик.
+
 Данные событий:
 
 - `SandboxOpened`: `userId`, `force`, `note`
 - `SandboxClosed`: `userId`, `result`, `closedAt`, `note`, `asyncUpdater`
 
-Порядок моделей задаёт приложение. Обычно справочники идут перед зависимыми таблицами.
+Порядок моделей задаёт приложение. Обычно справочники идут перед зависимыми
+таблицами.
 
 ## Возможности Модели
 
-Добавьте `HasSandbox` к каждой модели, у которой есть активная и sandbox-таблица.
+Добавьте `HasSandbox` к каждой модели, у которой есть активная и
+sandbox-таблица.
 
 ```php
 use Illuminate\Database\Eloquent\Model;
-use Packages\Sandbox\HasSandbox;
+use Cosmira\Sandbox\HasSandbox;
 
 class Category extends Model
 {
@@ -143,8 +188,8 @@ class Category extends Model
 | Свойство | По умолчанию | Описание |
 | --- | --- | --- |
 | `$sandboxTablePostfix` | `'_sb'` | Суффикс sandbox-таблицы |
-| `$sandboxPrimaryKey` | `null` | Первичный ключ; можно указать массив для составного ключа |
-| `$sandboxTrackChangeColumn` | `'change_date'` | Колонка для проверки изменённых строк |
+| `$sandboxPrimaryKey` | `null` | Первичный ключ; поддерживает составной ключ |
+| `$sandboxTrackChangeColumn` | `'change_date'` | Колонка для изменённых строк |
 
 Модель с `HasSandbox` умеет:
 
@@ -173,6 +218,20 @@ Category::useSandboxTable();
 Category::useActiveTable();
 ```
 
+Если sandbox уже включен, но конкретный блок должен явно работать с active
+таблицей, используйте scoped helper:
+
+```php
+Category::withoutSandbox(function (): void {
+    Category::query()->whereKey($id)->update([
+        'value' => 'written-to-active',
+    ]);
+});
+```
+
+Для обратного случая есть `withSandbox()`. Оба helper восстанавливают прежний
+режим модели после выполнения callback, включая исключения.
+
 Для синхронизации всей таблицы используйте методы модели:
 
 ```php
@@ -180,18 +239,114 @@ Category::syncIntoSandbox(); // active -> sandbox
 Category::syncIntoActive();  // sandbox -> active
 ```
 
-Для обновления одной записи в sandbox из active передайте модель объекту песочницы:
+## Middleware для Sandbox-Запросов
+
+Пакет регистрирует middleware alias `sandbox`. Middleware вызывает
+событие `ResolvingSandboxModels`, когда запрос изменяет данные (`POST`, `PUT`,
+`PATCH`, `DELETE`) или когда sandbox-сессия уже активна в `sandbox_status`.
+
+Подключите middleware к маршрутам конфигурации. Так приложение гарантирует,
+что каждый запрос идёт через одну точку проверки владельца и переключения
+моделей:
+
+```php
+Route::middleware('sandbox')->group(function (): void {
+    Route::get('/categories', ListCategoryController::class);
+    Route::post('/categories', StoreCategoryController::class);
+    Route::put('/categories/{category}', UpdateCategoryController::class);
+    Route::delete('/categories/{category}', DeleteCategoryController::class);
+});
+```
+
+В приложении решите, какие модели входят в конфигурацию. Это намеренно
+делается событием, а не конфигом пакета: приложение лучше знает порядок,
+границы и зависимости своих моделей.
+
+```php
+use App\Models\Category;
+use App\Models\Product;
+use Cosmira\Sandbox\Events\ResolvingSandboxModels;
+use Illuminate\Support\Facades\Event;
+
+Event::listen(ResolvingSandboxModels::class, function (
+    ResolvingSandboxModels $event,
+): void {
+    $event->models(Category::class, Product::class);
+});
+```
+
+После этого обычный код контроллеров не должен знать про `_sb` таблицы.
+Он продолжает работать через Eloquent:
+
+```php
+Category::query()->create($request->validated());
+```
+
+Если запрос идёт от владельца активной песочницы, запись попадёт в
+sandbox-таблицу. Если песочница занята другим пользователем, изменяющий запрос
+получит `403`.
+
+Middleware сбрасывает только request-local переключатели моделей после отправки
+ответа. Это защищает long-running процессы вроде Octane и RoadRunner от
+протечки статического состояния между запросами. Сам sandbox-статус в базе не
+закрывается: если sandbox активен, следующий запрос снова включит нужные модели
+через `ResolvingSandboxModels`.
+
+Модели, выбранные через `ResolvingSandboxModels`, пакет также вернет в
+active-режим после `commit()` или `rollback()`. После `save()` sandbox остаётся
+активным.
+
+Изменяющие запросы требуют активную sandbox-сессию и проверяют её владельца.
+Если песочница не открыта, её открыл другой пользователь, или изменить данные
+пытается гость, middleware вернет `403`.
+
+Для обновления одной записи в sandbox из active передайте модель объекту
+песочницы:
 
 ```php
 Sandbox::for($userId)->reset($category);
 ```
+
+## Пользовательский Опыт
+
+Хороший интерфейс поверх этого flow обычно показывает три состояния:
+
+- свободно: можно нажать "Редактировать" и вызвать `open()`
+- редактирует текущий пользователь: доступны "Применить", "Откатить" и
+  "Сохранить черновик"
+- редактирует другой пользователь: форма заблокирована, показан владелец
+
+Изменения не применяются автоматически. Это важно для конфигурации: владелец
+должен явно выбрать финальное действие.
+
+| Действие | Результат |
+| --- | --- |
+| `commit()` | Применяет sandbox-данные в active и освобождает блокировку |
+| `rollback()` | Возвращает sandbox к active и освобождает блокировку |
+| `save()` | Оставляет черновик и сохраняет блокировку за владельцем |
+
+`GET`/`HEAD` тоже могут читать sandbox-данные, если приложение подключило эти
+модели в `ResolvingSandboxModels`. Так владелец видит свой черновик, а
+остальные пользователи могут видеть состояние блокировки и работать в режиме
+просмотра.
+
+Для UI статуса достаточно отдавать данные из `Sandbox::me()->status()` или
+`Sandbox::for($userId)->status()`:
+
+```php
+$status = Sandbox::me()->status()?->toStatusArray();
+```
+
+Если пользователь не является владельцем, приложение может показать имя
+владельца из своей таблицы пользователей по `user_id` из статуса. Сам пакет
+хранит только идентификатор владельца, чтобы не навязывать модель пользователя.
 
 ## Тестирование
 
 В тестах используйте `SandboxTestHelpers`:
 
 ```php
-use Packages\Sandbox\Testing\SandboxTestHelpers;
+use Cosmira\Sandbox\Testing\SandboxTestHelpers;
 
 class ConfigControllerTest extends TestCase
 {
@@ -241,7 +396,7 @@ $status?->isOwnedBy($userId);
 $status?->toStatusArray();
 ```
 
-Колонка `status` использует enum `Packages\Sandbox\Enums\SandboxStatus`:
+Колонка `status` использует enum `Cosmira\Sandbox\Enums\SandboxStatus`:
 
 - `SandboxStatus::Free`
 - `SandboxStatus::Locked`
@@ -261,10 +416,13 @@ composer test
 composer test:mutation
 ```
 
-Для мутационного тестирования нужен coverage driver: PCOV, Xdebug или phpdbg. Настройки Infection находятся в `infection.json`.
+Для мутационного тестирования нужен coverage driver: PCOV, Xdebug или phpdbg.
+Настройки Infection находятся в `infection.json`.
 
 ## Ограничения
 
 - Пакет управляет одной глобальной sandbox-сессией на приложение.
-- `useSandboxTable()` — статический переключатель модели. После работы возвращайте модель через `useActiveTable()`.
-- Очереди не наследуют состояние переключения таблиц. Передавайте контекст явно и переключайте модели внутри job.
+- `useSandboxTable()` — статический переключатель модели. После работы
+  возвращайте модель через `useActiveTable()`.
+- Очереди не наследуют состояние переключения таблиц. Передавайте контекст
+  явно и переключайте модели внутри job.

@@ -2,12 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox\Tests\Integration;
+namespace Cosmira\Sandbox\Tests\Integration;
 
-use Packages\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
-use Packages\Sandbox\Models\SandboxStatus;
-use Packages\Sandbox\Testing\SandboxTestHelpers;
-use Packages\Sandbox\Tests\TestCase;
+use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
+use Cosmira\Sandbox\Models\SandboxStatus;
+use Cosmira\Sandbox\Testing\SandboxTestHelpers;
+use Cosmira\Sandbox\Tests\TestCase;
+use Illuminate\Database\Eloquent\Model;
 use PHPUnit\Framework\Attributes\Test;
 
 final class TestingHelpersTest extends TestCase
@@ -151,8 +152,70 @@ final class TestingHelpersTest extends TestCase
     #[Test]
     public function canSwitchModelsTable(): void
     {
-        // This tests that the helper methods exist and are callable
-        $this->assertTrue(method_exists($this, 'useSandbox'));
-        $this->assertTrue(method_exists($this, 'useActive'));
+        $this->useSandbox(HelperSwitchModelStub::class);
+
+        $this->assertTrue(HelperSwitchModelStub::isUsingSandboxTable());
+
+        $this->useActive(HelperSwitchModelStub::class);
+
+        $this->assertFalse(HelperSwitchModelStub::isUsingSandboxTable());
+    }
+
+    #[Test]
+    public function canApplySandboxForModel(): void
+    {
+        $this->applySandbox(HelperSwitchModelStub::class);
+
+        $this->assertTrue(HelperSwitchModelStub::$synced);
+    }
+
+    #[Test]
+    public function helpersRequireAUserWhenNoUserIsAuthenticated(): void
+    {
+        $methods = [
+            'commitSandbox',
+            'rollbackSandbox',
+            'saveSandbox',
+            'assertSandboxLocked',
+        ];
+
+        foreach ($methods as $method) {
+            try {
+                $this->{$method}();
+                $this->fail("Expected {$method} to require a user.");
+            } catch (\RuntimeException $exception) {
+                $this->assertSame(
+                    'No user ID provided and no authenticated user found',
+                    $exception->getMessage(),
+                );
+            }
+        }
+    }
+}
+
+class HelperSwitchModelStub extends Model
+{
+    public static bool $synced = false;
+
+    public static bool $usingSandboxTable = false;
+
+    public static function useSandboxTable(): void
+    {
+        self::$usingSandboxTable = true;
+    }
+
+    public static function useActiveTable(): void
+    {
+        self::$usingSandboxTable = false;
+    }
+
+    public static function isUsingSandboxTable(): bool
+    {
+        return self::$usingSandboxTable;
+    }
+
+    public static function syncIntoSandbox(): void
+    {
+        self::$synced = true;
     }
 }
