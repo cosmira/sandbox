@@ -17,10 +17,7 @@
         "perMutator": "infection-per-mutator.log"
     },
     "mutators": {
-        "@default": true,
-        "CastBool": false,
-        "TrueValue": false,
-        "ProtectedVisibility": false
+        "@default": true
     },
     "testFramework": "phpunit",
     "testFrameworkOptions": "--order-by=default",
