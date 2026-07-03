@@ -93,8 +93,9 @@ final class SandboxMiddlewareTest extends TestCase
         ]);
 
         $middleware = new SandboxMiddleware();
+        $user = $this->createUser(id: 1);
         $request = Request::create('/categories', 'POST');
-        $request->setUserResolver(fn () => $this->createUser(id: 1));
+        $request->setUserResolver(fn () => $user);
 
         Event::listen(ResolvingSandboxModels::class, function (
             ResolvingSandboxModels $event,
@@ -113,7 +114,60 @@ final class SandboxMiddlewareTest extends TestCase
     }
 
     #[Test]
-    public function writeRequestsAreRejectedWhenSandboxIsFree(): void
+    public function writeRequestsOpenFreeSandboxForTheCurrentUser(): void
+    {
+        SandboxStatus::query()->update([
+            'status'  => SandboxStatusEnum::Free,
+            'user_id' => null,
+        ]);
+
+        $middleware = new SandboxMiddleware();
+        $user = $this->createUser(id: 1);
+        $request = Request::create('/categories', 'POST');
+        $request->setUserResolver(fn () => $user);
+
+        Event::listen(ResolvingSandboxModels::class, function (
+            ResolvingSandboxModels $event,
+        ): void {
+            $event->models(MiddlewareSandboxModelStub::class);
+        });
+
+        $response = $middleware->handle($request, function (): string {
+            $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandboxTable());
+
+            return 'response';
+        });
+
+        $status = SandboxStatus::first();
+
+        $this->assertSame('response', $response);
+        $this->assertTrue($status?->isLocked());
+        $this->assertSame('1', (string) $status?->user_id);
+    }
+
+    #[Test]
+    public function writeRequestsOpenFreeSandboxEvenWhenItKeepsAStaleOwner(): void
+    {
+        SandboxStatus::query()->update([
+            'status'  => SandboxStatusEnum::Free,
+            'user_id' => 5,
+        ]);
+
+        $middleware = new SandboxMiddleware();
+        $user = $this->createUser(id: 1);
+        $request = Request::create('/categories', 'POST');
+        $request->setUserResolver(fn () => $user);
+
+        $response = $middleware->handle($request, fn (): string => 'response');
+        $status = SandboxStatus::first();
+
+        $this->assertSame('response', $response);
+        $this->assertTrue($status?->isLocked());
+        $this->assertSame('1', (string) $status?->user_id);
+    }
+
+    #[Test]
+    public function writeRequestsAreRejectedForGuestsWhenSandboxIsFree(): void
     {
         SandboxStatus::query()->update([
             'status'  => SandboxStatusEnum::Free,
@@ -122,24 +176,6 @@ final class SandboxMiddlewareTest extends TestCase
 
         $middleware = new SandboxMiddleware();
         $request = Request::create('/categories', 'POST');
-        $request->setUserResolver(fn () => $this->createUser(id: 1));
-
-        $this->expectException(HttpException::class);
-
-        $middleware->handle($request, fn (): string => 'response');
-    }
-
-    #[Test]
-    public function writeRequestsAreRejectedWhenFreeSandboxKeepsAStaleOwner(): void
-    {
-        SandboxStatus::query()->update([
-            'status'  => SandboxStatusEnum::Free,
-            'user_id' => 1,
-        ]);
-
-        $middleware = new SandboxMiddleware();
-        $request = Request::create('/categories', 'POST');
-        $request->setUserResolver(fn () => $this->createUser(id: 1));
 
         $this->expectException(HttpException::class);
 

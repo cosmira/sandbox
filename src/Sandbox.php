@@ -12,6 +12,7 @@ use Cosmira\Sandbox\Events\SandboxOpened;
 use Cosmira\Sandbox\Events\SandboxResetting;
 use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\Models\SandboxStatus;
+use Cosmira\Sandbox\Support\SandboxModelRegistry;
 use Cosmira\Sandbox\Support\SandboxRecordRestorer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -34,8 +35,32 @@ class Sandbox
      * Create a sandbox lifecycle manager.
      */
     public function __construct(
-        private readonly SandboxRecordRestorer $recordRestorer = new SandboxRecordRestorer(),
-    ) {}
+        ?SandboxRecordRestorer $recordRestorer = null,
+        ?SandboxModelRegistry $models = null,
+    ) {
+        $this->recordRestorer = $recordRestorer ?? new SandboxRecordRestorer();
+        $this->models = $models ?? app(SandboxModelRegistry::class);
+    }
+
+    /**
+     * Restores individual sandbox records from active data.
+     */
+    private readonly SandboxRecordRestorer $recordRestorer;
+
+    /**
+     * Stores the models that participate in the sandbox workflow.
+     */
+    private readonly SandboxModelRegistry $models;
+
+    /**
+     * Register models that belong to the sandbox workflow.
+     *
+     * @param class-string<Model> ...$models
+     */
+    public function models(string ...$models): void
+    {
+        $this->models->register(...$models);
+    }
 
     /**
      * Open the sandbox for the given user.
@@ -144,6 +169,7 @@ class Sandbox
         $closedAt = now();
 
         Event::dispatch(new SandboxResetting());
+        $this->models->syncIntoSandbox();
 
         $this->updateStatusRow($status, [
             'status'         => SandboxStatusEnum::Free,
@@ -175,6 +201,7 @@ class Sandbox
         $closedAt = now();
 
         Event::dispatch(new SandboxApplying());
+        $this->models->syncIntoActive();
 
         $this->updateStatusRow($status, [
             'status'         => SandboxStatusEnum::Free,

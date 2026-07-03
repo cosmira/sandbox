@@ -7,6 +7,8 @@ namespace Cosmira\Sandbox\Http\Middleware;
 use Closure;
 use Cosmira\Sandbox\Events\ResolvingSandboxModels;
 use Cosmira\Sandbox\Models\SandboxStatus;
+use Cosmira\Sandbox\Sandbox;
+use Cosmira\Sandbox\Support\SandboxModelRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
 
@@ -16,6 +18,14 @@ use Illuminate\Support\Facades\Event;
 class SandboxMiddleware
 {
     /**
+     * Create a middleware instance.
+     */
+    public function __construct(
+        private readonly ?SandboxModelRegistry $models = null,
+        private readonly ?Sandbox $sandbox = null,
+    ) {}
+
+    /**
      * Handle an incoming request.
      */
     public function handle(Request $request, Closure $next): mixed
@@ -23,6 +33,7 @@ class SandboxMiddleware
         $status = SandboxStatus::first();
 
         if ($this->isWriteRequest($request)) {
+            $status = $this->openSandboxIfFree($request, $status);
             $this->ensureWriteIsAllowed($request, $status);
         }
 
@@ -47,6 +58,28 @@ class SandboxMiddleware
     private function shouldUseSandbox(Request $request, ?SandboxStatus $status): bool
     {
         return $this->isWriteRequest($request) || $this->sandboxIsActive($status);
+    }
+
+    /**
+     * Open a free sandbox for the current write request user.
+     */
+    private function openSandboxIfFree(Request $request, ?SandboxStatus $status): ?SandboxStatus
+    {
+        if (! $status?->isFree()) {
+            return $status;
+        }
+
+        $userId = $request->user()?->getAuthIdentifier();
+
+        abort_if(
+            $userId === null,
+            403,
+            'An authenticated user is required to open the sandbox.',
+        );
+
+        $this->sandbox()->open($userId);
+
+        return $this->sandbox()->status();
     }
 
     /**
@@ -79,7 +112,9 @@ class SandboxMiddleware
      */
     private function resolveSandboxModels(Request $request): void
     {
-        Event::dispatch(new ResolvingSandboxModels($request));
+        $this->models()->useSandboxTables();
+
+        Event::dispatch(new ResolvingSandboxModels($request, $this->models()));
     }
 
     /**
@@ -96,5 +131,21 @@ class SandboxMiddleware
     private function sandboxIsActive(?SandboxStatus $status): bool
     {
         return $status !== null && ! $status->isFree();
+    }
+
+    /**
+     * Get the sandbox model registry.
+     */
+    private function models(): SandboxModelRegistry
+    {
+        return $this->models ?? app(SandboxModelRegistry::class);
+    }
+
+    /**
+     * Get the sandbox lifecycle manager.
+     */
+    private function sandbox(): Sandbox
+    {
+        return $this->sandbox ?? app(Sandbox::class);
     }
 }

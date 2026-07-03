@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cosmira\Sandbox\Events;
 
-use Cosmira\Sandbox\Exceptions\SandboxException;
+use Cosmira\Sandbox\Support\SandboxModelRegistry;
 use Illuminate\Http\Request;
 
 /**
@@ -13,13 +13,6 @@ use Illuminate\Http\Request;
 class ResolvingSandboxModels
 {
     /**
-     * The models switched to sandbox tables through this event.
-     *
-     * @var array<class-string, true>
-     */
-    private static array $models = [];
-
-    /**
      * Create a new sandbox model resolving event.
      */
     public function __construct(
@@ -27,6 +20,11 @@ class ResolvingSandboxModels
          * The request being handled.
          */
         public readonly Request $request,
+
+        /**
+         * The registry that switches models for the current request.
+         */
+        private readonly ?SandboxModelRegistry $registry = null,
     ) {}
 
     /**
@@ -36,12 +34,7 @@ class ResolvingSandboxModels
      */
     public function models(string ...$models): void
     {
-        foreach ($models as $model) {
-            $this->ensureCanSwitchTables($model);
-
-            self::$models[$model] = true;
-            $model::useSandboxTable();
-        }
+        $this->registry()->useSandboxTables(...$models);
     }
 
     /**
@@ -49,40 +42,14 @@ class ResolvingSandboxModels
      */
     public static function restoreActiveTables(): void
     {
-        foreach (array_keys(self::$models) as $model) {
-            if (self::canSwitchTables($model)) {
-                $model::useActiveTable();
-            }
-        }
-
-        self::$models = [];
+        app(SandboxModelRegistry::class)->restoreActiveTables();
     }
 
     /**
-     * Ensure the configured class exposes the sandbox table API.
-     *
-     * @param class-string $model
-     *
-     * @throws SandboxException
+     * Get the registry used by this event.
      */
-    private function ensureCanSwitchTables(string $model): void
+    private function registry(): SandboxModelRegistry
     {
-        throw_unless(
-            self::canSwitchTables($model),
-            SandboxException::class,
-            sprintf('Model %s must use HasSandbox trait.', $model),
-            SandboxException::CODE_MODEL_NOT_REGISTERED,
-        );
-    }
-
-    /**
-     * Determine if the configured class exposes the sandbox table API.
-     */
-    private static function canSwitchTables(string $model): bool
-    {
-        return class_exists($model)
-            && method_exists($model, 'isUsingSandboxTable')
-            && method_exists($model, 'useSandboxTable')
-            && method_exists($model, 'useActiveTable');
+        return $this->registry ?? app(SandboxModelRegistry::class);
     }
 }

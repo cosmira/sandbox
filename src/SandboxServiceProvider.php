@@ -11,9 +11,9 @@ use Cosmira\Sandbox\Commands\CloseSandboxCommand;
 use Cosmira\Sandbox\Commands\OpenSandboxCommand;
 use Cosmira\Sandbox\Commands\StatusSandboxCommand;
 use Cosmira\Sandbox\Enums\SandboxOperation;
-use Cosmira\Sandbox\Events\ResolvingSandboxModels;
 use Cosmira\Sandbox\Events\SandboxClosed;
 use Cosmira\Sandbox\Http\Middleware\SandboxMiddleware;
+use Cosmira\Sandbox\Support\SandboxModelRegistry;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -29,6 +29,7 @@ class SandboxServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/sandbox.php', 'sandbox');
 
+        $this->app->singleton(SandboxModelRegistry::class);
         $this->app->singleton(Sandbox::class);
     }
 
@@ -44,7 +45,7 @@ class SandboxServiceProvider extends ServiceProvider
 
         Event::listen(SandboxClosed::class, function (SandboxClosed $event): void {
             if ($event->result !== SandboxOperation::Save) {
-                ResolvingSandboxModels::restoreActiveTables();
+                app(SandboxModelRegistry::class)->restoreActiveTables();
             }
         });
 

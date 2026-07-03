@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Cosmira\Sandbox\Tests\Integration;
 
-use Cosmira\Sandbox\Events\ResolvingSandboxModels;
+use Cosmira\Sandbox\Enums\SandboxOperation;
 use Cosmira\Sandbox\HasSandbox;
 use Cosmira\Sandbox\Http\Middleware\SandboxMiddleware;
 use Cosmira\Sandbox\Sandbox;
@@ -13,7 +13,6 @@ use Cosmira\Sandbox\Tests\TestUser;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -49,11 +48,7 @@ final class ConfigurationWorkflowTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        Event::listen(ResolvingSandboxModels::class, function (
-            ResolvingSandboxModels $event,
-        ): void {
-            $event->models(ConfigurationModelStub::class);
-        });
+        app(Sandbox::class)->models(ConfigurationModelStub::class);
     }
 
     #[Test]
@@ -100,6 +95,52 @@ final class ConfigurationWorkflowTest extends TestCase
         }
 
         $this->fail('Other user was allowed to edit locked configuration.');
+    }
+
+    #[Test]
+    public function commitAppliesRegisteredSandboxModels(): void
+    {
+        $owner = $this->createConfigurationUser(3);
+        $middleware = new SandboxMiddleware();
+
+        app(Sandbox::class)->open($owner);
+        app(Sandbox::class)->resetSandboxData(ConfigurationModelStub::class);
+
+        $request = Request::create('/configuration/1', 'PATCH');
+        $request->setUserResolver(fn () => $owner);
+
+        $middleware->handle($request, function (): void {
+            ConfigurationModelStub::query()
+                ->whereKey(1)
+                ->update([
+                    'value'      => 'Committed',
+                    'updated_at' => now()->addMinute(),
+                ]);
+        });
+
+        app(Sandbox::class)->close($owner->getKey(), SandboxOperation::Commit);
+
+        $this->assertSame('Committed', DB::table('configuration_items')->value('value'));
+    }
+
+    #[Test]
+    public function rollbackRefreshesRegisteredSandboxModels(): void
+    {
+        $owner = $this->createConfigurationUser(4);
+
+        app(Sandbox::class)->open($owner);
+
+        DB::table('configuration_items_sb')->insert([
+            'id'         => 1,
+            'name'       => 'site_name',
+            'value'      => 'Draft',
+            'created_at' => now(),
+            'updated_at' => now()->addMinute(),
+        ]);
+
+        app(Sandbox::class)->close($owner->getKey(), SandboxOperation::Rollback);
+
+        $this->assertSame('Active', DB::table('configuration_items_sb')->value('value'));
     }
 
     /**
