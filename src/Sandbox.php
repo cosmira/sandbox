@@ -31,6 +31,13 @@ class Sandbox
     use Tappable;
 
     /**
+     * Create a sandbox lifecycle manager.
+     */
+    public function __construct(
+        private readonly SandboxRecordRestorer $recordRestorer = new SandboxRecordRestorer(),
+    ) {}
+
+    /**
      * Open the sandbox for the given user.
      *
      * @param int|string|Model $user
@@ -293,7 +300,7 @@ class Sandbox
      */
     private function resetSingleRecord(Model $model): void
     {
-        app(SandboxRecordRestorer::class)->restore($model);
+        $this->recordRestorer->restore($model);
     }
 
     /**
