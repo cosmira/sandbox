@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox\Exceptions;
+namespace Cosmira\Sandbox\Exceptions;
 
 use Exception;
 
@@ -11,11 +11,23 @@ use Exception;
  */
 class SandboxException extends Exception
 {
+    /**
+     * The sandbox is locked by another user.
+     */
     public const CODE_SANDBOX_LOCKED = 20605;
 
-    public const CODE_SANDBOX_EDIT_RESULT = 20606;
-
+    /**
+     * The sandbox is already free.
+     */
     public const CODE_SANDBOX_FREE = 20626;
 
+    /**
+     * The model does not support sandbox synchronization.
+     */
     public const CODE_MODEL_NOT_REGISTERED = 20630;
+
+    /**
+     * The configured sandbox synchronization column is missing.
+     */
+    public const CODE_SYNC_COLUMN_MISSING = 20631;
 }

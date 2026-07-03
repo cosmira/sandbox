@@ -2,19 +2,25 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox\Testing;
+namespace Cosmira\Sandbox\Testing;
 
+use Cosmira\Sandbox\Facades\Sandbox;
+use Cosmira\Sandbox\Models\SandboxStatus;
 use Illuminate\Database\Eloquent\Model;
-use Packages\Sandbox\Facades\Sandbox;
-use Packages\Sandbox\Models\SandboxStatus;
 
 /**
  * Test helpers for sandbox sessions.
  */
 trait SandboxTestHelpers
 {
-    protected function openSandbox(int|string|null $userId = null, bool $force = false, ?string $note = null): void
-    {
+    /**
+     * Open the sandbox for the given or authenticated user.
+     */
+    protected function openSandbox(
+        int|string|null $userId = null,
+        bool $force = false,
+        ?string $note = null,
+    ): void {
         $userId = $userId ?? auth()->user()?->getAuthIdentifier();
         if (! $userId) {
             throw new \RuntimeException('No user ID provided and no authenticated user found');
@@ -23,8 +29,14 @@ trait SandboxTestHelpers
         Sandbox::for($userId)->open($force, $note);
     }
 
-    protected function commitSandbox(int|string|null $userId = null, ?string $note = null, bool $async = true): void
-    {
+    /**
+     * Commit the sandbox for the given or authenticated user.
+     */
+    protected function commitSandbox(
+        int|string|null $userId = null,
+        ?string $note = null,
+        bool $async = true,
+    ): void {
         $userId = $userId ?? auth()->user()?->getAuthIdentifier();
         if (! $userId) {
             throw new \RuntimeException('No user ID provided and no authenticated user found');
@@ -33,6 +45,9 @@ trait SandboxTestHelpers
         Sandbox::for($userId)->commit($note, $async);
     }
 
+    /**
+     * Roll back the sandbox for the given or authenticated user.
+     */
     protected function rollbackSandbox(int|string|null $userId = null, ?string $note = null): void
     {
         $userId = $userId ?? auth()->user()?->getAuthIdentifier();
@@ -43,6 +58,9 @@ trait SandboxTestHelpers
         Sandbox::for($userId)->rollback($note);
     }
 
+    /**
+     * Save the sandbox for the given or authenticated user.
+     */
     protected function saveSandbox(int|string|null $userId = null, ?string $note = null): void
     {
         $userId = $userId ?? auth()->user()?->getAuthIdentifier();
@@ -53,6 +71,9 @@ trait SandboxTestHelpers
         Sandbox::for($userId)->save($note);
     }
 
+    /**
+     * Assert that the sandbox is free.
+     */
     protected function assertSandboxFree(): void
     {
         $status = SandboxStatus::first();
@@ -60,6 +81,9 @@ trait SandboxTestHelpers
         $this->assertTrue($status->isFree(), 'Sandbox is not free');
     }
 
+    /**
+     * Assert that the sandbox is locked by the given or authenticated user.
+     */
     protected function assertSandboxLocked(int|string|null $userId = null): void
     {
         $userId = $userId ?? auth()->user()?->getAuthIdentifier();
@@ -70,9 +94,16 @@ trait SandboxTestHelpers
         $status = SandboxStatus::first();
         $this->assertNotNull($status, 'SandboxStatus not found');
         $this->assertTrue($status->isLocked(), 'Sandbox is not locked');
-        $this->assertEquals((string) $userId, (string) $status->user_id, 'Sandbox is not owned by '.$userId);
+        $this->assertEquals(
+            (string) $userId,
+            (string) $status->user_id,
+            'Sandbox is not owned by '.$userId,
+        );
     }
 
+    /**
+     * Assert that the sandbox is saved.
+     */
     protected function assertSandboxSaved(): void
     {
         $status = SandboxStatus::first();
@@ -80,12 +111,17 @@ trait SandboxTestHelpers
         $this->assertTrue($status->isSaved(), 'Sandbox is not saved');
     }
 
+    /**
+     * Get the current sandbox status row.
+     */
     protected function getSandboxStatus(): ?SandboxStatus
     {
         return SandboxStatus::first();
     }
 
     /**
+     * Switch the given model to its sandbox table.
+     *
      * @param class-string<Model>|Model $modelOrClass
      */
     protected function useSandbox(string|Model $modelOrClass): void
@@ -97,6 +133,8 @@ trait SandboxTestHelpers
     }
 
     /**
+     * Switch the given model to its active table.
+     *
      * @param class-string<Model>|Model $modelOrClass
      */
     protected function useActive(string|Model $modelOrClass): void
@@ -108,6 +146,8 @@ trait SandboxTestHelpers
     }
 
     /**
+     * Apply active data to the sandbox table for the given model.
+     *
      * @param class-string<Model>|Model $modelOrClass
      */
     protected function applySandbox(string|Model $modelOrClass): void

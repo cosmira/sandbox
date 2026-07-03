@@ -2,17 +2,31 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox\Commands;
+namespace Cosmira\Sandbox\Commands;
 
+use Cosmira\Sandbox\Enums\SandboxOperation;
+use Cosmira\Sandbox\Sandbox;
 use Illuminate\Console\Command;
-use Packages\Sandbox\Sandbox;
 
 class StatusSandboxCommand extends Command
 {
+    /**
+     * The console command name and signature.
+     *
+     * @var string
+     */
     protected $signature = 'sandbox:status {--details : Show detailed information}';
 
+    /**
+     * The console command description.
+     *
+     * @var string
+     */
     protected $description = 'Display current sandbox status';
 
+    /**
+     * Execute the console command.
+     */
     public function handle(Sandbox $sandbox): int
     {
         $status = $sandbox->status();
@@ -38,7 +52,7 @@ class StatusSandboxCommand extends Command
                 ['Status Code', $status->status->name],
                 ['User ID', $status->user_id ?? 'N/A'],
                 ['Last Operation', $this->getOperationName($status->last_operation)],
-                ['Changed At', $status->change_date?->format('Y-m-d H:i:s') ?? 'N/A'],
+                ['Changed At', $status->change_date->format('Y-m-d H:i:s')],
                 ['Sent At', $status->send_date?->format('Y-m-d H:i:s') ?? 'N/A'],
                 ['Note', $status->note ?? 'N/A'],
             ]);
@@ -47,14 +61,11 @@ class StatusSandboxCommand extends Command
         return self::SUCCESS;
     }
 
-    private function getOperationName(?int $operation): string
+    /**
+     * Get the display name for a sandbox operation.
+     */
+    private function getOperationName(?SandboxOperation $operation): string
     {
-        return match ($operation) {
-            0       => 'Rollback',
-            1       => 'Commit',
-            2       => 'Save without commit',
-            null    => 'N/A',
-            default => "Unknown ({$operation})",
-        };
+        return $operation?->description() ?? 'N/A';
     }
 }

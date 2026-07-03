@@ -20,6 +20,7 @@
         "php": "^8.2",
         "illuminate/contracts": "^12.0 || ^13.0",
         "illuminate/database": "^12.0 || ^13.0",
+        "illuminate/http": "^12.0 || ^13.0",
         "illuminate/support": "^12.0 || ^13.0"
     },
     "require-dev": {
@@ -31,18 +32,18 @@
     },
     "autoload": {
         "psr-4": {
-            "Packages\\Sandbox\\": "src/"
+            "Cosmira\\Sandbox\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Packages\\Sandbox\\Tests\\": "tests/"
+            "Cosmira\\Sandbox\\Tests\\": "tests/"
         }
     },
     "extra": {
         "laravel": {
             "providers": [
-                "Packages\\Sandbox\\SandboxServiceProvider"
+                "Cosmira\\Sandbox\\SandboxServiceProvider"
             ]
         }
     },
@@ -64,6 +65,10 @@
         "test": [
             "@clear",
             "@php vendor/bin/phpunit"
+        ],
+        "test:coverage": [
+            "@clear",
+            "@php -d pcov.enabled=1 -d xdebug.mode=coverage vendor/bin/phpunit --coverage-text"
         ],
         "test:mutation": [
             "@clear",

@@ -2,52 +2,90 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox;
+namespace Cosmira\Sandbox;
 
+use Cosmira\Sandbox\Support\SandboxTableSynchronizer;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Query\Grammars\Grammar;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Adds sandbox table switching and synchronization to an Eloquent model.
  */
 trait HasSandbox
 {
+    /**
+     * The suffix appended to active table names for sandbox tables.
+     */
     protected static string $sandboxTablePostfix = '_sb';
 
     /**
+     * The primary key used when matching active and sandbox rows.
+     *
      * @var string|array<int, string>|null
      */
     protected static string|array|null $sandboxPrimaryKey = null;
 
+    /**
+     * The column used to detect changed rows during sync.
+     */
     protected static ?string $sandboxTrackChangeColumn = 'change_date';
 
     /**
-     * Return null to replace matching rows instead of comparing a change column.
+     * The columns copied between active and sandbox tables.
+     *
+     * @var array<int, string>|null
+     */
+    protected static ?array $sandboxSyncColumns = null;
+
+    /**
+     * Get the column used to detect changed rows during sync.
      */
     protected static function getSandboxTrackChangeColumn(): ?string
     {
         return static::$sandboxTrackChangeColumn;
     }
 
+    /**
+     * Indicates if queries should target the sandbox table.
+     */
     protected static bool $useSandboxTable = false;
 
+    /**
+     * Get the active table name for the model.
+     */
     public function getActiveTable(): string
     {
         return parent::getTable();
     }
 
+    /**
+     * Get the table associated with the model.
+     */
+    public function getTable(): string
+    {
+        return $this->getTableForQuery();
+    }
+
+    /**
+     * Get the table that should be used for the current query mode.
+     */
     public function getTableForQuery(): string
     {
         return static::$useSandboxTable ? $this->getSandboxTable() : $this->getActiveTable();
     }
 
+    /**
+     * Get the suffix used for sandbox tables.
+     */
     public function getSandboxTablePostfix(): string
     {
         return static::$sandboxTablePostfix;
     }
 
     /**
+     * Get the primary key used to match sandbox rows.
+     *
      * @return string|array<int, string>
      */
     public function getSandboxPrimaryKey(): string|array
@@ -56,6 +94,8 @@ trait HasSandbox
     }
 
     /**
+     * Get the primary key columns as an array.
+     *
      * @return array<int, string>
      */
     private function getSandboxPrimaryKeyColumns(): array
@@ -65,31 +105,77 @@ trait HasSandbox
         return is_array($key) ? $key : [$key];
     }
 
+    /**
+     * Get the sandbox table name for the model.
+     */
     public function getSandboxTable(): string
     {
         return $this->getActiveTable().$this->getSandboxTablePostfix();
     }
 
+    /**
+     * Switch model queries to the sandbox table.
+     */
     public static function useSandboxTable(): void
     {
         static::$useSandboxTable = true;
     }
 
+    /**
+     * Switch model queries to the active table.
+     */
     public static function useActiveTable(): void
     {
         static::$useSandboxTable = false;
     }
 
+    /**
+     * Determine if model queries currently target the sandbox table.
+     */
     public static function isUsingSandboxTable(): bool
     {
         return static::$useSandboxTable;
     }
 
+    /**
+     * Run the callback while model queries target the active table.
+     *
+     * @template TReturn
+     *
+     * @param callable(): TReturn $callback
+     *
+     * @return TReturn
+     */
+    public static function withoutSandbox(callable $callback): mixed
+    {
+        return static::usingTableState(false, $callback);
+    }
+
+    /**
+     * Run the callback while model queries target the sandbox table.
+     *
+     * @template TReturn
+     *
+     * @param callable(): TReturn $callback
+     *
+     * @return TReturn
+     */
+    public static function withSandbox(callable $callback): mixed
+    {
+        return static::usingTableState(true, $callback);
+    }
+
+    /**
+     * Scope the query to the sandbox table.
+     */
     protected function scopeSandbox(Builder $query): Builder
     {
         return $query->from($this->getSandboxTable());
     }
 
+    /**
+     * Scope the query to the active table.
+     */
     protected function scopeActive(Builder $query): Builder
     {
         return $query->from($this->getActiveTable());
@@ -105,11 +191,24 @@ trait HasSandbox
         $sandboxTable = $instance->getSandboxTable();
         $keyColumns = $instance->getSandboxPrimaryKeyColumns();
         $changeColumn = static::getSandboxTrackChangeColumn();
+        $columns = $instance->getSandboxSyncColumns();
 
-        DB::transaction(function () use ($instance, $activeTable, $sandboxTable, $keyColumns, $changeColumn): void {
-            static::deleteOrphansInTarget($sandboxTable, $activeTable, $keyColumns);
-            static::syncUpdatesFromSourceToTarget($instance, $sandboxTable, $activeTable, $keyColumns, $changeColumn, 'sb', 't');
-            static::insertMissingIntoTarget($sandboxTable, $activeTable, $keyColumns);
+        DB::transaction(function () use (
+            $activeTable,
+            $sandboxTable,
+            $keyColumns,
+            $changeColumn,
+            $columns,
+        ): void {
+            static::synchronizer()->sync(
+                sourceTable: $activeTable,
+                targetTable: $sandboxTable,
+                keyColumns: $keyColumns,
+                columns: $columns,
+                changeColumn: $changeColumn,
+                sourceAlias: 't',
+                targetAlias: 'sb',
+            );
         });
     }
 
@@ -123,134 +222,79 @@ trait HasSandbox
         $sandboxTable = $instance->getSandboxTable();
         $keyColumns = $instance->getSandboxPrimaryKeyColumns();
         $changeColumn = static::getSandboxTrackChangeColumn();
+        $columns = $instance->getSandboxSyncColumns();
 
-        DB::transaction(function () use ($instance, $activeTable, $sandboxTable, $keyColumns, $changeColumn): void {
-            static::deleteOrphansInTarget($activeTable, $sandboxTable, $keyColumns);
-            static::syncUpdatesFromSourceToTarget($instance, $activeTable, $sandboxTable, $keyColumns, $changeColumn, 't', 'sb');
-            static::insertMissingIntoTarget($activeTable, $sandboxTable, $keyColumns);
+        DB::transaction(function () use (
+            $activeTable,
+            $sandboxTable,
+            $keyColumns,
+            $changeColumn,
+            $columns,
+        ): void {
+            static::synchronizer()->sync(
+                sourceTable: $sandboxTable,
+                targetTable: $activeTable,
+                keyColumns: $keyColumns,
+                columns: $columns,
+                changeColumn: $changeColumn,
+                sourceAlias: 'sb',
+                targetAlias: 't',
+            );
         });
     }
 
     /**
-     * @param array<int, string> $keyColumns
+     * Create the table synchronizer for sandbox data.
      */
-    private static function deleteOrphansInTarget(string $targetTable, string $sourceTable, array $keyColumns): void
+    private static function synchronizer(): SandboxTableSynchronizer
     {
-        DB::table($targetTable)
-            ->whereNotExists(function ($query) use ($sourceTable, $targetTable, $keyColumns): void {
-                $query->select(DB::raw(1))->from($sourceTable);
-                foreach ($keyColumns as $col) {
-                    $query->whereColumn($sourceTable.'.'.$col, $targetTable.'.'.$col);
-                }
-            })
-            ->delete();
+        return new SandboxTableSynchronizer();
     }
 
     /**
-     * @param array<int, string> $keyColumns
+     * Run the callback with a temporary table state.
+     *
+     * @template TReturn
+     *
+     * @param callable(): TReturn $callback
+     *
+     * @return TReturn
      */
-    private static function syncUpdatesFromSourceToTarget(
-        object $instance,
-        string $targetTable,
-        string $sourceTable,
-        array $keyColumns,
-        ?string $changeColumn,
-        string $targetAlias,
-        string $sourceAlias,
-    ): void {
-        $columns = $instance->getSandboxSyncColumns();
-        if ($columns === []) {
-            return;
-        }
-
-        $grammar = DB::connection()->getQueryGrammar();
-        if ($changeColumn === null) {
-            static::deleteTargetRowsExistingInSource($targetTable, $sourceTable, $keyColumns, $grammar);
-        } else {
-            static::updateTargetFromSource($targetTable, $sourceTable, $keyColumns, $columns, $changeColumn, $grammar, $targetAlias, $sourceAlias);
-        }
-    }
-
-    /**
-     * @param array<int, string> $keyColumns
-     */
-    private static function deleteTargetRowsExistingInSource(string $targetTable, string $sourceTable, array $keyColumns, Grammar $grammar): void
+    private static function usingTableState(bool $useSandbox, callable $callback): mixed
     {
-        $keyCondition = implode(' AND ', array_map(
-            fn (string $col): string => $grammar->wrap($sourceTable.'.'.$col).' = '.$grammar->wrap($targetTable.'.'.$col),
-            $keyColumns,
-        ));
-        DB::statement('
-            DELETE FROM '.$grammar->wrapTable($targetTable).'
-            WHERE EXISTS (
-                SELECT 1 FROM '.$grammar->wrapTable($sourceTable).' WHERE '.$keyCondition.'
-            )
-        ');
+        $previousState = static::$useSandboxTable;
+        static::$useSandboxTable = $useSandbox;
+
+        try {
+            return $callback();
+        } finally {
+            static::$useSandboxTable = $previousState;
+        }
     }
 
     /**
-     * @param array<int, string> $keyColumns
-     * @param array<int, string> $columns
+     * Get the columns that may be written during sandbox synchronization.
+     *
+     * @return array<int, string>
      */
-    private static function updateTargetFromSource(
-        string $targetTable,
-        string $sourceTable,
-        array $keyColumns,
-        array $columns,
-        string $changeColumn,
-        Grammar $grammar,
-        string $targetAlias,
-        string $sourceAlias,
-    ): void {
-        $updateSet = [];
-        foreach (array_diff($columns, $keyColumns) as $col) {
-            $updateSet[$targetAlias.'.'.$col] = DB::raw($grammar->wrap($sourceAlias.'.'.$col));
-        }
-
-        $query = DB::table($targetTable.' as '.$targetAlias)
-            ->join($sourceTable.' as '.$sourceAlias, function ($join) use ($keyColumns, $targetAlias, $sourceAlias): void {
-                foreach ($keyColumns as $col) {
-                    $join->on($targetAlias.'.'.$col, '=', $sourceAlias.'.'.$col);
-                }
-            });
-        if (in_array($changeColumn, $columns, true)) {
-            $query->whereColumn($targetAlias.'.'.$changeColumn, '!=', $sourceAlias.'.'.$changeColumn);
-        }
-
-        $query->update($updateSet);
-    }
-
-    /**
-     * @param array<int, string> $keyColumns
-     */
-    private static function insertMissingIntoTarget(string $targetTable, string $sourceTable, array $keyColumns): void
+    public function getSandboxWritableColumns(): array
     {
-        $notExistsConditions = implode(' AND ', array_map(
-            fn (string $col): string => sprintf('%s.%s = %s.%s', $targetTable, $col, $sourceTable, $col),
-            $keyColumns,
-        ));
-        DB::statement("
-            INSERT INTO {$targetTable}
-            SELECT * FROM {$sourceTable}
-            WHERE NOT EXISTS (
-                SELECT 1 FROM {$targetTable} WHERE {$notExistsConditions}
-            )
-        ");
+        return $this->getSandboxSyncColumns();
     }
 
     /**
+     * Get the columns copied during sandbox synchronization.
+     *
      * @return array<int, string>
      */
     protected function getSandboxSyncColumns(): array
     {
-        $row = DB::table($this->getActiveTable())->first();
-        if ($row === null) {
-            return [];
-        }
-
-        return array_keys((array) $row);
+        return static::$sandboxSyncColumns ?? Schema::getColumnListing($this->getActiveTable());
     }
 
+    /**
+     * Determine if the model supports sandbox synchronization.
+     */
     public static function supportsSandboxSync(): bool
     {
         return true;

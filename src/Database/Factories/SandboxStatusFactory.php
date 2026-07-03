@@ -2,32 +2,42 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox\Database\Factories;
+namespace Cosmira\Sandbox\Database\Factories;
 
+use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
+use Cosmira\Sandbox\Models\SandboxStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Packages\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
-use Packages\Sandbox\Models\SandboxStatus;
 
 /**
+ * Factory for sandbox status rows.
+ *
  * @extends Factory<SandboxStatus>
  */
 class SandboxStatusFactory extends Factory
 {
+    /**
+     * The name of the factory's corresponding model.
+     *
+     * @var class-string<SandboxStatus>
+     */
     protected $model = SandboxStatus::class;
 
     /**
+     * Define the model's default state.
+     *
      * @return array<string, mixed>
      */
     public function definition(): array
     {
         return [
+            'id'             => 1,
             'status'         => SandboxStatusEnum::Free,
             'last_operation' => null,
             'note'           => null,
             'change_date'    => now(),
-            'user_id'        => 1,
+            'user_id'        => null,
             'change_id'      => 0,
-            'send_date'      => now(),
+            'send_date'      => null,
         ];
     }
 }

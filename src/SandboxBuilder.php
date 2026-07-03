@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox;
+namespace Cosmira\Sandbox;
 
+use Cosmira\Sandbox\Enums\SandboxOperation;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -11,16 +12,28 @@ use Illuminate\Database\Eloquent\Model;
  */
 class SandboxBuilder
 {
+    /**
+     * The user ID bound to the builder.
+     */
     private int|string $userId;
 
+    /**
+     * The sandbox service instance.
+     */
     private Sandbox $sandbox;
 
+    /**
+     * Create a new user-scoped sandbox builder.
+     */
     public function __construct(int|string $userId)
     {
         $this->userId = $userId;
         $this->sandbox = app(Sandbox::class);
     }
 
+    /**
+     * Open the sandbox for the builder user.
+     */
     public function open(bool $force = false, ?string $note = null): self
     {
         $this->sandbox->open($this->userId, $force, $note);
@@ -28,22 +41,33 @@ class SandboxBuilder
         return $this;
     }
 
+    /**
+     * Roll back the sandbox for the builder user.
+     */
     public function rollback(?string $note = null): void
     {
-        $this->sandbox->close($this->userId, 0, $note);
-    }
-
-    public function commit(?string $note = null, bool $asyncUpdater = true): void
-    {
-        $this->sandbox->close($this->userId, 1, $note, $asyncUpdater);
-    }
-
-    public function save(?string $note = null): void
-    {
-        $this->sandbox->close($this->userId, 2, $note);
+        $this->sandbox->close($this->userId, SandboxOperation::Rollback, $note);
     }
 
     /**
+     * Commit the sandbox for the builder user.
+     */
+    public function commit(?string $note = null, bool $asyncUpdater = true): void
+    {
+        $this->sandbox->close($this->userId, SandboxOperation::Commit, $note, $asyncUpdater);
+    }
+
+    /**
+     * Save the sandbox for the builder user without committing.
+     */
+    public function save(?string $note = null): void
+    {
+        $this->sandbox->close($this->userId, SandboxOperation::Save, $note);
+    }
+
+    /**
+     * Apply active data to the sandbox table for the given model.
+     *
      * @param class-string<Model>|Model $modelOrClass
      */
     public function apply(string|Model $modelOrClass): self
@@ -54,6 +78,8 @@ class SandboxBuilder
     }
 
     /**
+     * Reset sandbox data for the given model.
+     *
      * @param class-string<Model>|Model $modelOrClass
      */
     public function reset(string|Model $modelOrClass): self
@@ -63,16 +89,25 @@ class SandboxBuilder
         return $this;
     }
 
+    /**
+     * Get the current sandbox status row.
+     */
     public function status(): ?Models\SandboxStatus
     {
         return $this->sandbox->status();
     }
 
+    /**
+     * Get the user ID bound to the builder.
+     */
     public function getUserId(): int|string
     {
         return $this->userId;
     }
 
+    /**
+     * Get the sandbox service instance.
+     */
     public function getSandbox(): Sandbox
     {
         return $this->sandbox;

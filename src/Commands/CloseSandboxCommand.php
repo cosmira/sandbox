@@ -2,17 +2,36 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox\Commands;
+namespace Cosmira\Sandbox\Commands;
 
+use Cosmira\Sandbox\Enums\SandboxOperation;
+use Cosmira\Sandbox\Exceptions\SandboxException;
+use Cosmira\Sandbox\Sandbox;
 use Illuminate\Console\Command;
-use Packages\Sandbox\Sandbox;
 
 class CloseSandboxCommand extends Command
 {
-    protected $signature = 'sandbox:close {userId? : The ID or UUID of the user (uses current user if omitted)} {--result=0 : Result code: 0=rollback, 1=commit, 2=save without commit} {--note= : Optional note for the operation} {--async : Use async updater}';
+    /**
+     * The console command name and signature.
+     *
+     * @var string
+     */
+    protected $signature = 'sandbox:close'
+        .' {userId? : The ID or UUID of the user (uses current user if omitted)}'
+        .' {--result=rollback : Result operation: rollback, commit, or save}'
+        .' {--note= : Optional note for the operation}'
+        .' {--async : Use async updater}';
 
+    /**
+     * The console command description.
+     *
+     * @var string
+     */
     protected $description = 'Close a sandbox session';
 
+    /**
+     * Execute the console command.
+     */
     public function handle(Sandbox $sandbox): int
     {
         $userId = $this->argument('userId');
@@ -27,12 +46,14 @@ class CloseSandboxCommand extends Command
             $userId = $user->getAuthIdentifier();
         }
 
-        $result = (int) ($this->option('result') ?? 0);
+        $result = SandboxOperation::tryFromInput(
+            (string) ($this->option('result') ?? SandboxOperation::Rollback->label()),
+        );
         $note = $this->option('note');
         $asyncUpdater = (bool) $this->option('async');
 
-        if (! in_array($result, [0, 1, 2], true)) {
-            $this->error('Result code must be 0 (rollback), 1 (commit), or 2 (save)');
+        if (! $result instanceof SandboxOperation) {
+            $this->error('Result must be rollback, commit, or save');
 
             return self::FAILURE;
         }
@@ -40,16 +61,10 @@ class CloseSandboxCommand extends Command
         try {
             $sandbox->close($userId, $result, $note, $asyncUpdater);
 
-            $resultText = match ($result) {
-                0 => 'rollback',
-                1 => 'commit',
-                2 => 'save',
-            };
-
-            $this->info("Sandbox closed with result: {$resultText}");
+            $this->info("Sandbox closed with result: {$result->label()}");
 
             return self::SUCCESS;
-        } catch (\Exception $e) {
+        } catch (SandboxException $e) {
             $this->error("Failed to close sandbox: {$e->getMessage()}");
 
             return self::FAILURE;

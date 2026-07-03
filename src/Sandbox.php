@@ -2,8 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox;
+namespace Cosmira\Sandbox;
 
+use Cosmira\Sandbox\Enums\SandboxOperation;
+use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
+use Cosmira\Sandbox\Events\SandboxApplying;
+use Cosmira\Sandbox\Events\SandboxClosed;
+use Cosmira\Sandbox\Events\SandboxOpened;
+use Cosmira\Sandbox\Events\SandboxResetting;
+use Cosmira\Sandbox\Exceptions\SandboxException;
+use Cosmira\Sandbox\Models\SandboxStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -11,13 +19,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Traits\Dumpable;
 use Illuminate\Support\Traits\Macroable;
 use Illuminate\Support\Traits\Tappable;
-use Packages\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
-use Packages\Sandbox\Events\SandboxApplying;
-use Packages\Sandbox\Events\SandboxClosed;
-use Packages\Sandbox\Events\SandboxOpened;
-use Packages\Sandbox\Events\SandboxResetting;
-use Packages\Sandbox\Exceptions\SandboxException;
-use Packages\Sandbox\Models\SandboxStatus;
 
 /**
  * Manages the sandbox session and dispatches domain events.
@@ -29,6 +30,10 @@ class Sandbox
     use Tappable;
 
     /**
+     * Open the sandbox for the given user.
+     *
+     * @param int|string|Model $user
+     *
      * @throws SandboxException
      */
     public function open(int|string|Model $user, bool $force = false, ?string $note = null): void
@@ -38,9 +43,7 @@ class Sandbox
         $userId = $user instanceof Model ? $user->getKey() : $user;
 
         DB::transaction(function () use ($userId, $force, $note): void {
-            $status = SandboxStatus::first();
-
-            throw_unless($status, \RuntimeException::class, 'Sandbox status not found');
+            $status = $this->lockedStatus();
 
             if (! $force && $status->isLocked() && (string) $status->user_id !== (string) $userId) {
                 throw new SandboxException(
@@ -49,7 +52,14 @@ class Sandbox
                 );
             }
 
-            if ($status->isFree() || ($force && $status->isLocked() && (string) $status->user_id !== (string) $userId)) {
+            if (
+                $status->isFree()
+                || (
+                    $force
+                    && $status->isLocked()
+                    && (string) $status->user_id !== (string) $userId
+                )
+            ) {
                 Event::dispatch(new SandboxResetting());
             }
 
@@ -67,18 +77,36 @@ class Sandbox
     }
 
     /**
+     * Close the sandbox with the given operation.
+     *
      * @throws SandboxException
      */
-    public function close(int|string $userId, int $result, ?string $note = null, bool $asyncUpdater = true): void
-    {
-        Log::debug('Closing sandbox', ['user_id' => $userId, 'result' => $result]);
+    public function close(
+        int|string $userId,
+        SandboxOperation $result,
+        ?string $note = null,
+        bool $asyncUpdater = true,
+    ): void {
+        Log::debug('Closing sandbox', [
+            'user_id' => $userId,
+            'result'  => $result->label(),
+        ]);
 
         DB::transaction(function () use ($userId, $result, $note, $asyncUpdater): void {
-            $status = SandboxStatus::firstOrFail();
+            $status = $this->lockedStatus();
 
-            throw_if($status->isFree(), SandboxException::class, 'Cannot close: sandbox is already free. Use open() first.', SandboxException::CODE_SANDBOX_FREE);
+            throw_if(
+                $status->isFree(),
+                SandboxException::class,
+                'Cannot close: sandbox is already free. Use open() first.',
+                SandboxException::CODE_SANDBOX_FREE
+            );
 
-            if ($status->isLocked() && (string) $status->user_id !== (string) $userId && $result !== 0) {
+            if (
+                $status->isLocked()
+                && (string) $status->user_id !== (string) $userId
+                && $result !== SandboxOperation::Rollback
+            ) {
                 throw new SandboxException(
                     'Sandbox is locked by other user '.$status->user_id,
                     SandboxException::CODE_SANDBOX_LOCKED,
@@ -86,113 +114,136 @@ class Sandbox
             }
 
             match ($result) {
-                0       => $this->handleRollback($status, $userId, $note),
-                1       => $this->handleCommit($status, $userId, $note, $asyncUpdater),
-                2       => $this->handleSave($status, $userId, $note),
-                default => throw new SandboxException(
-                    'Unknown result: '.$result,
-                    SandboxException::CODE_SANDBOX_EDIT_RESULT,
+                SandboxOperation::Rollback => $this->handleRollback($status, $userId, $note),
+                SandboxOperation::Commit   => $this->handleCommit(
+                    $status,
+                    $userId,
+                    $note,
+                    $asyncUpdater,
                 ),
+                SandboxOperation::Save     => $this->handleSave($status, $userId, $note),
             };
 
-            Log::info('Sandbox closed', ['user_id' => $userId, 'result' => $result]);
+            Log::info('Sandbox closed', ['user_id' => $userId, 'result' => $result->label()]);
         });
     }
 
     /**
-     * @deprecated Use open().
+     * Roll back the sandbox and release the lock.
      */
-    public function beginEdit(int|string $userId, bool $force = false, ?string $note = null): void
-    {
-        $this->open($userId, $force, $note);
-    }
-
-    /**
-     * @deprecated Use close().
-     */
-    public function endEdit(int|string $userId, int $result, ?string $note = null, bool $asyncUpdater = true): void
-    {
-        $this->close($userId, $result, $note, $asyncUpdater);
-    }
-
     private function handleRollback(SandboxStatus $status, int|string $userId, ?string $note): void
     {
         $closedAt = now();
 
         Event::dispatch(new SandboxResetting());
 
-        $status->update([
+        $this->updateStatusRow($status, [
             'status'         => SandboxStatusEnum::Free,
             'user_id'        => $userId,
-            'last_operation' => 0,
+            'last_operation' => SandboxOperation::Rollback,
             'note'           => $note,
             'change_date'    => $closedAt,
+            'change_id'      => $status->change_id + 1,
         ]);
 
-        Event::dispatch(new SandboxClosed($userId, 0, $closedAt, $note, false));
+        Event::dispatch(new SandboxClosed(
+            $userId,
+            SandboxOperation::Rollback,
+            $closedAt,
+            $note,
+            false,
+        ));
     }
 
-    private function handleCommit(SandboxStatus $status, int|string $userId, ?string $note, bool $asyncUpdater): void
-    {
+    /**
+     * Commit the sandbox and release the lock.
+     */
+    private function handleCommit(
+        SandboxStatus $status,
+        int|string $userId,
+        ?string $note,
+        bool $asyncUpdater,
+    ): void {
         $closedAt = now();
 
         Event::dispatch(new SandboxApplying());
 
-        $status->update([
+        $this->updateStatusRow($status, [
             'status'         => SandboxStatusEnum::Free,
             'user_id'        => $userId,
-            'last_operation' => 1,
+            'last_operation' => SandboxOperation::Commit,
             'note'           => $note,
             'send_date'      => $closedAt,
             'change_date'    => $closedAt,
+            'change_id'      => $status->change_id + 1,
         ]);
 
-        Event::dispatch(new SandboxClosed($userId, 1, $closedAt, $note, $asyncUpdater));
+        Event::dispatch(new SandboxClosed(
+            $userId,
+            SandboxOperation::Commit,
+            $closedAt,
+            $note,
+            $asyncUpdater,
+        ));
     }
 
+    /**
+     * Save the sandbox without applying it to active data.
+     */
     private function handleSave(SandboxStatus $status, int|string $userId, ?string $note): void
     {
         $closedAt = now();
 
-        $status->update([
+        $this->updateStatusRow($status, [
             'status'         => SandboxStatusEnum::Saved,
             'user_id'        => $userId,
-            'last_operation' => 2,
+            'last_operation' => SandboxOperation::Save,
             'note'           => $note,
             'change_date'    => $closedAt,
+            'change_id'      => $status->change_id + 1,
         ]);
 
-        Event::dispatch(new SandboxClosed($userId, 2, $closedAt, $note, false));
+        Event::dispatch(new SandboxClosed(
+            $userId,
+            SandboxOperation::Save,
+            $closedAt,
+            $note,
+            false,
+        ));
     }
 
+    /**
+     * Update the singleton sandbox status row.
+     *
+     * @param array<string, mixed> $attributes
+     */
+    private function updateStatusRow(SandboxStatus $status, array $attributes): void
+    {
+        $status->forceFill($attributes)->save();
+    }
+
+    /**
+     * Get the locked singleton sandbox status row for a lifecycle mutation.
+     */
+    private function lockedStatus(): SandboxStatus
+    {
+        return SandboxStatus::query()->lockForUpdate()->firstOrFail();
+    }
+
+    /**
+     * Get the current sandbox status row.
+     */
     public function status(): ?SandboxStatus
     {
         return SandboxStatus::first();
     }
 
     /**
-     * @deprecated Use status().
-     */
-    public function getStatus(): array
-    {
-        $model = $this->status();
-
-        return [
-            'status'  => $model->status?->value ?? 0,
-            'user_id' => $model->user_id ?? null,
-        ];
-    }
-
-    /**
-     * @deprecated Use status()?->isOwnedBy($userId).
-     */
-    public function isSandboxUser(int|string $userId): bool
-    {
-        return $this->status()?->isOwnedBy($userId) ?? false;
-    }
-
-    /**
+     * Reset sandbox data for the given model class or instance.
+     *
      * @param class-string<Model>|Model $modelOrClass
+     *
+     * @throws SandboxException
      */
     public function resetSandboxData(string|Model $modelOrClass): void
     {
@@ -209,19 +260,36 @@ class Sandbox
     }
 
     /**
+     * Ensure the given model supports sandbox synchronization.
+     *
      * @param class-string<Model>|Model $modelOrClass
+     *
+     * @throws SandboxException
      */
     private function ensureModelCanSync(string|Model $modelOrClass): void
     {
         $modelClass = $modelOrClass instanceof Model ? $modelOrClass::class : $modelOrClass;
 
         throw_unless(
+            is_subclass_of($modelClass, Model::class),
+            SandboxException::class,
+            sprintf('Model %s must extend %s.', $modelClass, Model::class),
+            SandboxException::CODE_MODEL_NOT_REGISTERED
+        );
+
+        throw_unless(
             method_exists($modelClass, 'syncIntoSandbox'),
             SandboxException::class,
-            sprintf('Model %s has no syncIntoSandbox(). Use HasSandbox trait.', $modelClass), SandboxException::CODE_MODEL_NOT_REGISTERED
+            sprintf('Model %s has no syncIntoSandbox(). Use HasSandbox trait.', $modelClass),
+            SandboxException::CODE_MODEL_NOT_REGISTERED
         );
     }
 
+    /**
+     * Reset one sandbox row from the matching active row.
+     *
+     * @throws SandboxException
+     */
     private function resetSingleRecord(Model $model): void
     {
         throw_unless(
@@ -238,12 +306,13 @@ class Sandbox
         $keyValues = is_array($keyName)
             ? array_intersect_key($model->getAttributes(), array_flip($keyColumns))
             : [$keyName => $model->getKey()];
+        $columns = $this->syncColumnsFor($model, $keyColumns);
 
         if (count($keyValues) !== count($keyColumns) || in_array(null, $keyValues, true)) {
             return;
         }
 
-        $row = DB::table($table)->where($keyValues)->first();
+        $row = DB::table($table)->where($keyValues)->first($columns);
 
         if ($row === null) {
             DB::table($sandboxTable)->where($keyValues)->delete();
@@ -253,12 +322,43 @@ class Sandbox
 
         $exists = DB::table($sandboxTable)->where($keyValues)->exists();
         if ($exists) {
-            DB::table($sandboxTable)->where($keyValues)->update((array) $row);
+            $values = array_diff_key((array) $row, array_flip($keyColumns));
+
+            if ($values !== []) {
+                DB::table($sandboxTable)->where($keyValues)->update($values);
+            }
         } else {
             DB::table($sandboxTable)->insert((array) $row);
         }
     }
 
+    /**
+     * Get the columns used for a single-record sandbox reset.
+     *
+     * @param array<int, string> $keyColumns
+     *
+     * @return array<int, string>
+     */
+    private function syncColumnsFor(Model $model, array $keyColumns): array
+    {
+        throw_unless(
+            method_exists($model, 'getSandboxWritableColumns'),
+            SandboxException::class,
+            'Model '.$model::class.' must expose sandbox writable columns.',
+            SandboxException::CODE_MODEL_NOT_REGISTERED,
+        );
+
+        return array_values(array_unique([
+            ...$keyColumns,
+            ...$model->getSandboxWritableColumns(),
+        ]));
+    }
+
+    /**
+     * Reset all sandbox rows for the given model class.
+     *
+     * @param class-string<Model> $modelClass
+     */
     private function resetBulk(string $modelClass): void
     {
         $modelClass::syncIntoSandbox();

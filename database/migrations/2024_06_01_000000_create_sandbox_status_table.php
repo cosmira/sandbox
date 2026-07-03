@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class() extends Migration
@@ -17,6 +18,7 @@ return new class() extends Migration
         }
 
         Schema::create($table, function (Blueprint $blueprint): void {
+            $blueprint->integer('id')->primary();
             $blueprint->unsignedTinyInteger('status')->default(0);
             $blueprint->unsignedTinyInteger('last_operation')->nullable();
             $blueprint->string('note', 500)->nullable();
@@ -27,6 +29,7 @@ return new class() extends Migration
         });
 
         DB::table($table)->insert([
+            'id'             => 1,
             'status'         => 0,
             'last_operation' => null,
             'note'           => null,

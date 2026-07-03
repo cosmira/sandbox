@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Packages\Sandbox\Events;
+namespace Cosmira\Sandbox\Events;
 
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
