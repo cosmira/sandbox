@@ -35,14 +35,14 @@ class SandboxTableSynchronizer
         string $sourceAlias = 'source',
         string $targetAlias = 'target',
     ): void {
-        $this->deleteOrphans($targetTable, $sourceTable, $keyColumns);
+        $this->deleteMissing($targetTable, $sourceTable, $keyColumns);
 
         $columns = $columns ?: $this->columnsFrom($sourceTable);
         if ($columns === []) {
             return;
         }
 
-        $this->syncUpdates(
+        $this->syncExisting(
             targetTable: $targetTable,
             sourceTable: $sourceTable,
             keyColumns: $keyColumns,
@@ -59,20 +59,18 @@ class SandboxTableSynchronizer
      *
      * @param array<int, string> $keyColumns
      */
-    private function deleteOrphans(
+    private function deleteMissing(
         string $targetTable,
         string $sourceTable,
         array $keyColumns,
     ): void {
         DB::table($targetTable)
-            ->whereNotExists(function (QueryBuilder $query) use (
-                $sourceTable,
-                $targetTable,
-                $keyColumns,
-            ): void {
-                $this->selectExistsColumn($query, $sourceTable, $keyColumns);
-                $this->whereKeysMatch($query, $sourceTable, $targetTable, $keyColumns);
-            })
+            ->whereNotExists(fn (QueryBuilder $query) => $this->matchingRowSubquery(
+                $query,
+                matchTable: $sourceTable,
+                currentTable: $targetTable,
+                keyColumns: $keyColumns,
+            ))
             ->delete();
     }
 
@@ -82,7 +80,7 @@ class SandboxTableSynchronizer
      * @param array<int, string> $keyColumns
      * @param array<int, string> $columns
      */
-    private function syncUpdates(
+    private function syncExisting(
         string $targetTable,
         string $sourceTable,
         array $keyColumns,
@@ -92,23 +90,14 @@ class SandboxTableSynchronizer
         string $sourceAlias,
     ): void {
         if ($changeColumn === null) {
-            $this->deleteTargetRowsExistingInSource($targetTable, $sourceTable, $keyColumns);
+            $this->replaceExisting($targetTable, $sourceTable, $keyColumns);
 
             return;
         }
 
-        throw_unless(
-            in_array($changeColumn, $columns, true),
-            SandboxException::class,
-            sprintf(
-                'Sandbox sync column [%s] does not exist on [%s].',
-                $changeColumn,
-                $sourceTable,
-            ),
-            SandboxException::CODE_SYNC_COLUMN_MISSING,
-        );
+        $this->ensureChangeColumn($sourceTable, $columns, $changeColumn);
 
-        $this->updateTargetFromSource(
+        $this->updateChanged(
             targetTable: $targetTable,
             sourceTable: $sourceTable,
             keyColumns: $keyColumns,
@@ -124,20 +113,18 @@ class SandboxTableSynchronizer
      *
      * @param array<int, string> $keyColumns
      */
-    private function deleteTargetRowsExistingInSource(
+    private function replaceExisting(
         string $targetTable,
         string $sourceTable,
         array $keyColumns,
     ): void {
         DB::table($targetTable)
-            ->whereExists(function (QueryBuilder $query) use (
-                $sourceTable,
-                $targetTable,
-                $keyColumns,
-            ): void {
-                $this->selectExistsColumn($query, $sourceTable, $keyColumns);
-                $this->whereKeysMatch($query, $sourceTable, $targetTable, $keyColumns);
-            })
+            ->whereExists(fn (QueryBuilder $query) => $this->matchingRowSubquery(
+                $query,
+                matchTable: $sourceTable,
+                currentTable: $targetTable,
+                keyColumns: $keyColumns,
+            ))
             ->delete();
     }
 
@@ -147,7 +134,7 @@ class SandboxTableSynchronizer
      * @param array<int, string> $keyColumns
      * @param array<int, string> $columns
      */
-    private function updateTargetFromSource(
+    private function updateChanged(
         string $targetTable,
         string $sourceTable,
         array $keyColumns,
@@ -263,31 +250,63 @@ class SandboxTableSynchronizer
         array $columns,
     ): void {
         $rows = DB::table($sourceTable)
-            ->whereNotExists(function (QueryBuilder $query) use (
-                $targetTable,
-                $sourceTable,
-                $keyColumns,
-            ): void {
-                $this->selectExistsColumn($query, $targetTable, $keyColumns);
-                $this->whereKeysMatch($query, $targetTable, $sourceTable, $keyColumns);
-            })
+            ->whereNotExists(fn (QueryBuilder $query) => $this->matchingRowSubquery(
+                $query,
+                matchTable: $targetTable,
+                currentTable: $sourceTable,
+                keyColumns: $keyColumns,
+            ))
             ->select($columns)
             ->cursor();
 
+        $this->insertChunked($targetTable, $rows);
+    }
+
+    /**
+     * Insert rows using portable batches.
+     *
+     * @param iterable<int, object> $rows
+     */
+    private function insertChunked(string $table, iterable $rows): void
+    {
         $chunk = [];
 
         foreach ($rows as $row) {
             $chunk[] = (array) $row;
 
             if (count($chunk) === self::INSERT_CHUNK_SIZE) {
-                DB::table($targetTable)->insert($chunk);
+                DB::table($table)->insert($chunk);
                 $chunk = [];
             }
         }
 
         if ($chunk !== []) {
-            DB::table($targetTable)->insert($chunk);
+            DB::table($table)->insert($chunk);
         }
+    }
+
+    /**
+     * Ensure the tracked column is available on selected source rows.
+     *
+     * @param array<int, string> $columns
+     *
+     * @throws SandboxException
+     */
+    private function ensureChangeColumn(
+        string $sourceTable,
+        array $columns,
+        string $changeColumn,
+    ): void {
+        throw_unless(
+            in_array($changeColumn, $columns, true),
+            SandboxException::class,
+            sprintf(
+                'Sandbox sync column [%s] does not exist on [%s].',
+                $changeColumn,
+                $sourceTable,
+            ),
+            SandboxException::CODE_SYNC_COLUMN_MISSING,
+        );
     }
 
     /**
@@ -305,12 +324,15 @@ class SandboxTableSynchronizer
      *
      * @param array<int, string> $keyColumns
      */
-    private function selectExistsColumn(
+    private function matchingRowSubquery(
         QueryBuilder $query,
-        string $table,
+        string $matchTable,
+        string $currentTable,
         array $keyColumns,
     ): void {
-        $query->select($table.'.'.$keyColumns[0])->from($table);
+        $query->select($matchTable.'.'.$keyColumns[0])->from($matchTable);
+
+        $this->whereKeysMatch($query, $matchTable, $currentTable, $keyColumns);
     }
 
     /**
