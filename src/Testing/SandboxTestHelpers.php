@@ -21,7 +21,7 @@ trait SandboxTestHelpers
         bool $force = false,
         ?string $note = null,
     ): void {
-        $userId = $userId ?? auth()->user()?->getAuthIdentifier();
+        $userId ??= auth()->user()?->getAuthIdentifier();
         if (! $userId) {
             throw new \RuntimeException('No user ID provided and no authenticated user found');
         }
@@ -37,7 +37,7 @@ trait SandboxTestHelpers
         ?string $note = null,
         bool $async = true,
     ): void {
-        $userId = $userId ?? auth()->user()?->getAuthIdentifier();
+        $userId ??= auth()->user()?->getAuthIdentifier();
         if (! $userId) {
             throw new \RuntimeException('No user ID provided and no authenticated user found');
         }
@@ -50,7 +50,7 @@ trait SandboxTestHelpers
      */
     protected function rollbackSandbox(int|string|null $userId = null, ?string $note = null): void
     {
-        $userId = $userId ?? auth()->user()?->getAuthIdentifier();
+        $userId ??= auth()->user()?->getAuthIdentifier();
         if (! $userId) {
             throw new \RuntimeException('No user ID provided and no authenticated user found');
         }
@@ -63,7 +63,7 @@ trait SandboxTestHelpers
      */
     protected function saveSandbox(int|string|null $userId = null, ?string $note = null): void
     {
-        $userId = $userId ?? auth()->user()?->getAuthIdentifier();
+        $userId ??= auth()->user()?->getAuthIdentifier();
         if (! $userId) {
             throw new \RuntimeException('No user ID provided and no authenticated user found');
         }
@@ -86,7 +86,7 @@ trait SandboxTestHelpers
      */
     protected function assertSandboxLocked(int|string|null $userId = null): void
     {
-        $userId = $userId ?? auth()->user()?->getAuthIdentifier();
+        $userId ??= auth()->user()?->getAuthIdentifier();
         if (! $userId) {
             throw new \RuntimeException('No user ID provided and no authenticated user found');
         }

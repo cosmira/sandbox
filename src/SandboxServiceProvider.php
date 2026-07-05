@@ -14,6 +14,7 @@ use Cosmira\Sandbox\Enums\SandboxOperation;
 use Cosmira\Sandbox\Events\SandboxClosed;
 use Cosmira\Sandbox\Http\Middleware\SandboxMiddleware;
 use Cosmira\Sandbox\Support\SandboxModelRegistry;
+use DragonCode\Benchmark\Benchmark;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -72,7 +73,7 @@ class SandboxServiceProvider extends ServiceProvider
                 StatusSandboxCommand::class,
             ];
 
-            if (class_exists('DragonCode\Benchmark\Benchmark')) {
+            if (class_exists(Benchmark::class)) {
                 $commands[] = BenchmarkSyncCommand::class;
             }
 

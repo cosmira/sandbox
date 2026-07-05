@@ -44,7 +44,7 @@ class OpenSandboxCommand extends Command
             $userId = $user->getAuthIdentifier();
         }
 
-        $force = (bool) $this->option('force');
+        $force = $this->option('force') === true;
         $note = $this->option('note');
 
         try {

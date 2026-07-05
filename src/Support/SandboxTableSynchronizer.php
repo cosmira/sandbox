@@ -153,8 +153,13 @@ class SandboxTableSynchronizer
             $sourceAlias,
         ) as $row) {
             $attributes = (array) $row;
-            $keys = array_intersect_key($attributes, array_flip($keyColumns));
-            $values = array_diff_key($attributes, array_flip($keyColumns));
+            $keys = [];
+            $values = $attributes;
+
+            foreach ($keyColumns as $keyColumn) {
+                $keys[$keyColumn] = $attributes[$keyColumn];
+                unset($values[$keyColumn]);
+            }
 
             if ($values !== []) {
                 DB::table($targetTable)->where($keys)->update($values);

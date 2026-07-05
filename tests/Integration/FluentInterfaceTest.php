@@ -79,7 +79,10 @@ final class FluentInterfaceTest extends TestCase
         $this->assertEquals(SandboxStatusEnum::Free, $status->status);
 
         Event::assertDispatched(SandboxApplying::class);
-        Event::assertDispatched(SandboxClosed::class);
+        Event::assertDispatched(
+            SandboxClosed::class,
+            fn (SandboxClosed $event): bool => $event->asyncUpdater === true,
+        );
     }
 
     #[Test]
@@ -181,7 +184,6 @@ final class FluentInterfaceTest extends TestCase
 
         // Store the status for comparison
         $oldStatus = $status1->status;
-        $oldUserId = $status1->user_id;
 
         // Close for next test
         app(\Cosmira\Sandbox\Sandbox::class)->close(1, SandboxOperation::Rollback);

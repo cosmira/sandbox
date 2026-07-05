@@ -7,6 +7,7 @@ namespace Cosmira\Sandbox\Tests\Unit;
 use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\HasSandbox;
 use Cosmira\Sandbox\Sandbox;
+use Cosmira\Sandbox\Support\SandboxTableSynchronizer;
 use Cosmira\Sandbox\Tests\TestCase;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -584,6 +585,7 @@ final class SyncOperationsTest extends TestCase
         app(Sandbox::class)->resetSandboxData($model);
 
         $this->assertFalse(DB::table('items_sb')->where('id', 1)->exists());
+        $this->assertSame(0, DB::table('items_sb')->count());
     }
 
     /**
@@ -637,6 +639,93 @@ final class SyncOperationsTest extends TestCase
         SimpleModelStub::syncIntoSandbox();
 
         $this->assertSame(0, DB::table('items_sb')->count());
+    }
+
+    #[Test]
+    public function synchronizerUsesSchemaColumnsWhenColumnsAreNotProvided(): void
+    {
+        DB::table('items')->insert([
+            [
+                'id'         => 10,
+                'name'       => 'schema-columns',
+                'value'      => 321,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $synchronizer = new SandboxTableSynchronizer();
+
+        $synchronizer->sync(
+            sourceTable: 'items',
+            targetTable: 'items_sb',
+            keyColumns: ['id'],
+            columns: [],
+            changeColumn: null,
+        );
+
+        $row = DB::table('items_sb')->where('id', 10)->first();
+
+        $this->assertSame('schema-columns', $row->name);
+        $this->assertSame(321, $row->value);
+    }
+
+    #[Test]
+    public function synchronizerSkipsInsertionWhenNoColumnsCanBeResolved(): void
+    {
+        Schema::shouldReceive('getColumnListing')
+            ->once()
+            ->with('items')
+            ->andReturn([]);
+
+        try {
+            $synchronizer = new SandboxTableSynchronizer();
+
+            $synchronizer->sync(
+                sourceTable: 'items',
+                targetTable: 'items_sb',
+                keyColumns: ['id'],
+                columns: [],
+                changeColumn: null,
+            );
+
+            $this->assertSame(0, DB::table('items_sb')->count());
+        } finally {
+            Schema::swap(DB::connection()->getSchemaBuilder());
+        }
+    }
+
+    #[Test]
+    public function synchronizerInsertsMissingRowsInPortableChunks(): void
+    {
+        $now = now();
+        $rows = [];
+
+        for ($id = 1; $id <= 501; $id++) {
+            $rows[] = [
+                'id'         => $id,
+                'name'       => 'item-'.$id,
+                'value'      => $id,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        DB::table('items')->insert($rows);
+
+        $synchronizer = new SandboxTableSynchronizer();
+
+        $synchronizer->sync(
+            sourceTable: 'items',
+            targetTable: 'items_sb',
+            keyColumns: ['id'],
+            columns: ['id', 'name', 'value', 'created_at', 'updated_at'],
+            changeColumn: null,
+        );
+
+        $this->assertSame(501, DB::table('items_sb')->count());
+        $this->assertSame(500, DB::table('items_sb')->where('id', 500)->value('value'));
+        $this->assertSame(501, DB::table('items_sb')->where('id', 501)->value('value'));
     }
 }
 

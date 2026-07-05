@@ -9,6 +9,8 @@ use Cosmira\Sandbox\Events\ResolvingSandboxModels;
 use Cosmira\Sandbox\HasSandbox;
 use Cosmira\Sandbox\Http\Middleware\SandboxMiddleware;
 use Cosmira\Sandbox\Models\SandboxStatus;
+use Cosmira\Sandbox\Sandbox;
+use Cosmira\Sandbox\Support\SandboxModelRegistry;
 use Cosmira\Sandbox\Tests\TestCase;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
@@ -85,6 +87,20 @@ final class SandboxMiddlewareTest extends TestCase
     }
 
     #[Test]
+    public function readRequestsUseTheInjectedRegistryWhenSandboxIsActive(): void
+    {
+        SandboxStatus::query()->update(['status' => SandboxStatusEnum::Saved]);
+
+        $registry = new TrackingSandboxMiddlewareRegistry();
+        $middleware = new SandboxMiddleware($registry);
+        $request = Request::create('/categories', 'GET');
+
+        $middleware->handle($request, fn (): string => 'response');
+
+        $this->assertSame([[]], $registry->resolvedModels);
+    }
+
+    #[Test]
     public function writeRequestsRouteModelsThroughSandboxDuringTheRequest(): void
     {
         SandboxStatus::query()->update([
@@ -146,6 +162,25 @@ final class SandboxMiddlewareTest extends TestCase
     }
 
     #[Test]
+    public function writeRequestsUseTheInjectedSandboxWhenOpeningFreeSandbox(): void
+    {
+        SandboxStatus::query()->update([
+            'status'  => SandboxStatusEnum::Free,
+            'user_id' => null,
+        ]);
+
+        $sandbox = new TrackingSandboxMiddlewareSandbox();
+        $middleware = new SandboxMiddleware(sandbox: $sandbox);
+        $request = Request::create('/categories', 'POST');
+        $request->setUserResolver(fn () => new StringIdentifierUserStub('7'));
+
+        $response = $middleware->handle($request, fn (): string => 'response');
+
+        $this->assertSame('response', $response);
+        $this->assertSame(['7'], $sandbox->openedFor);
+    }
+
+    #[Test]
     public function writeRequestsOpenFreeSandboxEvenWhenItKeepsAStaleOwner(): void
     {
         SandboxStatus::query()->update([
@@ -177,9 +212,16 @@ final class SandboxMiddlewareTest extends TestCase
         $middleware = new SandboxMiddleware();
         $request = Request::create('/categories', 'POST');
 
-        $this->expectException(HttpException::class);
+        try {
+            $middleware->handle($request, fn (): string => 'response');
+        } catch (HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+            $this->assertTrue(SandboxStatus::first()?->isFree());
 
-        $middleware->handle($request, fn (): string => 'response');
+            return;
+        }
+
+        $this->fail('Guest request opened the sandbox.');
     }
 
     #[Test]
@@ -267,9 +309,36 @@ final class SandboxMiddlewareTest extends TestCase
         $middleware = new SandboxMiddleware();
         $request = Request::create('/categories', 'DELETE');
 
-        $this->expectException(HttpException::class);
+        try {
+            $middleware->handle($request, fn (): string => 'response');
+        } catch (HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+            $this->assertTrue(SandboxStatus::first()?->isLocked());
 
-        $middleware->handle($request, fn (): string => 'response');
+            return;
+        }
+
+        $this->fail('Guest request modified an owned sandbox.');
+    }
+
+    #[Test]
+    public function writeRequestsAreRejectedWhenTheStatusRowIsMissing(): void
+    {
+        SandboxStatus::query()->delete();
+
+        $middleware = new SandboxMiddleware();
+        $request = Request::create('/categories', 'POST');
+        $request->setUserResolver(fn () => new StringIdentifierUserStub('1'));
+
+        try {
+            $middleware->handle($request, fn (): string => 'response');
+        } catch (HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+
+            return;
+        }
+
+        $this->fail('Request modified data without a sandbox status row.');
     }
 
     #[Test]
@@ -368,6 +437,44 @@ class MiddlewareSandboxModelStub extends Model
     use HasSandbox;
 
     protected $table = 'middleware_items';
+}
+
+class TrackingSandboxMiddlewareRegistry extends SandboxModelRegistry
+{
+    /**
+     * The model batches requested by the middleware.
+     *
+     * @var array<int, array<int, class-string>>
+     */
+    public array $resolvedModels = [];
+
+    public function useSandboxTables(string ...$models): void
+    {
+        $this->resolvedModels[] = $models;
+    }
+}
+
+class TrackingSandboxMiddlewareSandbox extends Sandbox
+{
+    /**
+     * The users passed to the injected sandbox lifecycle manager.
+     *
+     * @var array<int, int|string>
+     */
+    public array $openedFor = [];
+
+    public function open(int|string|Model $user, bool $force = false, ?string $note = null): void
+    {
+        $this->openedFor[] = $user instanceof Model ? $user->getKey() : $user;
+    }
+
+    public function status(): ?SandboxStatus
+    {
+        return new SandboxStatus([
+            'status'  => SandboxStatusEnum::Locked,
+            'user_id' => 7,
+        ]);
+    }
 }
 
 class StringIdentifierUserStub implements Authenticatable

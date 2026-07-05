@@ -50,7 +50,7 @@ class CloseSandboxCommand extends Command
             (string) ($this->option('result') ?? SandboxOperation::Rollback->label()),
         );
         $note = $this->option('note');
-        $asyncUpdater = (bool) $this->option('async');
+        $asyncUpdater = $this->option('async') === true;
 
         if (! $result instanceof SandboxOperation) {
             $this->error('Result must be rollback, commit, or save');

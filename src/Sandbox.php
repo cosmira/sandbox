@@ -65,7 +65,6 @@ class Sandbox
     /**
      * Open the sandbox for the given user.
      *
-     * @param int|string|Model $user
      *
      * @throws SandboxException
      */
@@ -78,7 +77,7 @@ class Sandbox
         DB::transaction(function () use ($userId, $force, $note): void {
             $status = $this->lockedStatus();
 
-            if (! $force && $status->isLocked() && (string) $status->user_id !== (string) $userId) {
+            if (! $force && $status->isLocked() && ! $status->isOwnedBy($userId)) {
                 throw new SandboxException(
                     'Sandbox is locked by other user '.$status->user_id,
                     SandboxException::CODE_SANDBOX_LOCKED,
@@ -90,7 +89,7 @@ class Sandbox
                 || (
                     $force
                     && $status->isLocked()
-                    && (string) $status->user_id !== (string) $userId
+                    && ! $status->isOwnedBy($userId)
                 )
             ) {
                 Event::dispatch(new SandboxResetting());
@@ -137,7 +136,7 @@ class Sandbox
 
             if (
                 $status->isLocked()
-                && (string) $status->user_id !== (string) $userId
+                && ! $status->isOwnedBy($userId)
                 && $result !== SandboxOperation::Rollback
             ) {
                 throw new SandboxException(

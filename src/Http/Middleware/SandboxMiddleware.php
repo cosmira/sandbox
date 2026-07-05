@@ -18,12 +18,25 @@ use Illuminate\Support\Facades\Event;
 class SandboxMiddleware
 {
     /**
+     * The registry that knows which models participate in sandbox mode.
+     */
+    private readonly SandboxModelRegistry $models;
+
+    /**
+     * The sandbox lifecycle manager.
+     */
+    private readonly Sandbox $sandbox;
+
+    /**
      * Create a middleware instance.
      */
     public function __construct(
-        private readonly ?SandboxModelRegistry $models = null,
-        private readonly ?Sandbox $sandbox = null,
-    ) {}
+        ?SandboxModelRegistry $models = null,
+        ?Sandbox $sandbox = null,
+    ) {
+        $this->models = $models ?? app(SandboxModelRegistry::class);
+        $this->sandbox = $sandbox ?? app(Sandbox::class);
+    }
 
     /**
      * Handle an incoming request.
@@ -37,7 +50,7 @@ class SandboxMiddleware
             $this->ensureWriteIsAllowed($request, $status);
         }
 
-        if ($this->shouldUseSandbox($request, $status)) {
+        if ($this->shouldUseSandbox($status)) {
             $this->resolveSandboxModels($request);
         }
 
@@ -55,9 +68,9 @@ class SandboxMiddleware
     /**
      * Determine if the request should switch models to sandbox tables.
      */
-    private function shouldUseSandbox(Request $request, ?SandboxStatus $status): bool
+    private function shouldUseSandbox(?SandboxStatus $status): bool
     {
-        return $this->isWriteRequest($request) || $this->sandboxIsActive($status);
+        return $this->sandboxIsActive($status);
     }
 
     /**
@@ -65,7 +78,7 @@ class SandboxMiddleware
      */
     private function openSandboxIfFree(Request $request, ?SandboxStatus $status): ?SandboxStatus
     {
-        if (! $status?->isFree()) {
+        if ($status === null || ! $status->isFree()) {
             return $status;
         }
 
@@ -77,9 +90,9 @@ class SandboxMiddleware
             'An authenticated user is required to open the sandbox.',
         );
 
-        $this->sandbox()->open($userId);
+        $this->sandbox->open($userId);
 
-        return $this->sandbox()->status();
+        return $this->sandbox->status();
     }
 
     /**
@@ -99,12 +112,17 @@ class SandboxMiddleware
      */
     private function userOwnsActiveSandbox(Request $request, ?SandboxStatus $status): bool
     {
+        if (! $this->sandboxIsActive($status)) {
+            return false;
+        }
+
         $userId = $request->user()?->getAuthIdentifier();
 
-        return $this->sandboxIsActive($status)
-            && $status->user_id !== null
-            && $userId !== null
-            && (string) $status->user_id === (string) $userId;
+        if ($userId === null) {
+            return false;
+        }
+
+        return $status->isOwnedBy($userId);
     }
 
     /**
@@ -112,9 +130,9 @@ class SandboxMiddleware
      */
     private function resolveSandboxModels(Request $request): void
     {
-        $this->models()->useSandboxTables();
+        $this->models->useSandboxTables();
 
-        Event::dispatch(new ResolvingSandboxModels($request, $this->models()));
+        Event::dispatch(new ResolvingSandboxModels($request, $this->models));
     }
 
     /**
@@ -131,21 +149,5 @@ class SandboxMiddleware
     private function sandboxIsActive(?SandboxStatus $status): bool
     {
         return $status !== null && ! $status->isFree();
-    }
-
-    /**
-     * Get the sandbox model registry.
-     */
-    private function models(): SandboxModelRegistry
-    {
-        return $this->models ?? app(SandboxModelRegistry::class);
-    }
-
-    /**
-     * Get the sandbox lifecycle manager.
-     */
-    private function sandbox(): Sandbox
-    {
-        return $this->sandbox ?? app(Sandbox::class);
     }
 }

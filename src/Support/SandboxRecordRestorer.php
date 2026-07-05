@@ -34,11 +34,9 @@ class SandboxRecordRestorer
 
         if ($row === null) {
             DB::table($model->getSandboxTable())->where($keyValues)->delete();
-
-            return;
+        } else {
+            $this->writeSandboxRow($model, $keyValues, (array) $row, $keyColumns);
         }
-
-        $this->writeSandboxRow($model, $keyValues, (array) $row, $keyColumns);
     }
 
     /**
@@ -52,7 +50,10 @@ class SandboxRecordRestorer
             throw_unless(
                 method_exists($model, $method),
                 SandboxException::class,
-                'Model '.$model::class.' must use HasSandbox trait for single-record reset.',
+                sprintf(
+                    'Model %s must use HasSandbox trait for single-record reset.',
+                    $model::class,
+                ),
                 SandboxException::CODE_MODEL_NOT_REGISTERED,
             );
         }
@@ -113,7 +114,7 @@ class SandboxRecordRestorer
         throw_unless(
             method_exists($model, 'getSandboxWritableColumns'),
             SandboxException::class,
-            'Model '.$model::class.' must expose sandbox writable columns.',
+            sprintf('Model %s must expose sandbox writable columns.', $model::class),
             SandboxException::CODE_MODEL_NOT_REGISTERED,
         );
 
@@ -144,7 +145,10 @@ class SandboxRecordRestorer
             return;
         }
 
-        $values = array_diff_key($attributes, array_flip($keyColumns));
+        $values = $attributes;
+        foreach ($keyColumns as $keyColumn) {
+            unset($values[$keyColumn]);
+        }
 
         if ($values !== []) {
             DB::table($model->getSandboxTable())->where($keyValues)->update($values);

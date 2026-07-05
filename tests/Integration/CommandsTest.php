@@ -7,9 +7,11 @@ namespace Cosmira\Sandbox\Tests\Integration;
 use Carbon\Carbon;
 use Cosmira\Sandbox\Enums\SandboxOperation;
 use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
+use Cosmira\Sandbox\Events\SandboxClosed;
 use Cosmira\Sandbox\Models\SandboxStatus;
 use Cosmira\Sandbox\Sandbox;
 use Cosmira\Sandbox\Tests\TestCase;
+use Illuminate\Support\Facades\Event;
 use PHPUnit\Framework\Attributes\Test;
 
 /**
@@ -73,6 +75,24 @@ final class CommandsTest extends TestCase
 
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Free, $status->status);
+    }
+
+    #[Test]
+    public function closeCommandPassesAsyncFlagToTheSandboxLifecycle(): void
+    {
+        app(Sandbox::class)->open(1);
+        Event::fake([SandboxClosed::class]);
+
+        $this->artisan('sandbox:close', [
+            'userId'   => '1',
+            '--result' => 'commit',
+            '--async'  => true,
+        ])->assertSuccessful();
+
+        Event::assertDispatched(
+            SandboxClosed::class,
+            fn (SandboxClosed $event): bool => $event->asyncUpdater === true,
+        );
     }
 
     #[Test]

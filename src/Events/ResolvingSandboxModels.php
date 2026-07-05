@@ -13,6 +13,11 @@ use Illuminate\Http\Request;
 class ResolvingSandboxModels
 {
     /**
+     * The registry that switches models for the current request.
+     */
+    private readonly SandboxModelRegistry $registry;
+
+    /**
      * Create a new sandbox model resolving event.
      */
     public function __construct(
@@ -20,12 +25,10 @@ class ResolvingSandboxModels
          * The request being handled.
          */
         public readonly Request $request,
-
-        /**
-         * The registry that switches models for the current request.
-         */
-        private readonly ?SandboxModelRegistry $registry = null,
-    ) {}
+        ?SandboxModelRegistry $registry = null,
+    ) {
+        $this->registry = $registry ?? app(SandboxModelRegistry::class);
+    }
 
     /**
      * Switch the given models to their sandbox tables.
@@ -34,7 +37,7 @@ class ResolvingSandboxModels
      */
     public function models(string ...$models): void
     {
-        $this->registry()->useSandboxTables(...$models);
+        $this->registry->useSandboxTables(...$models);
     }
 
     /**
@@ -43,13 +46,5 @@ class ResolvingSandboxModels
     public static function restoreActiveTables(): void
     {
         app(SandboxModelRegistry::class)->restoreActiveTables();
-    }
-
-    /**
-     * Get the registry used by this event.
-     */
-    private function registry(): SandboxModelRegistry
-    {
-        return $this->registry ?? app(SandboxModelRegistry::class);
     }
 }

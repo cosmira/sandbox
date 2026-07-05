@@ -59,8 +59,8 @@ class BenchmarkSyncCommand extends Command
         bench()
             ->round(2)
             ->compare([
-                'Active > Sandbox' => fn () => $this->benchmarkActiveToSandbox(),
-                'Sandbox > Active' => fn () => $this->benchmarkSandboxToActive(),
+                'Active > Sandbox' => $this->benchmarkActiveToSandbox(...),
+                'Sandbox > Active' => $this->benchmarkSandboxToActive(...),
             ])
             ->toConsole();
 

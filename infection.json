@@ -9,7 +9,7 @@
             "Testing/SandboxTestHelpers.php"
         ]
     },
-    "timeout": 10,
+    "timeout": 20,
     "logs": {
         "text": "infection.log",
         "summary": "infection-summary.log",
@@ -25,6 +25,6 @@
     "phpUnit": {
         "configDir": "."
     },
-    "minMsi": 90,
-    "minCoveredMsi": 90
+    "minMsi": 96,
+    "minCoveredMsi": 96
 }

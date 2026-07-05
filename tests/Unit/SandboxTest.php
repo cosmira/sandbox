@@ -14,7 +14,10 @@ use Cosmira\Sandbox\Events\SandboxResetting;
 use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\Models\SandboxStatus;
 use Cosmira\Sandbox\Sandbox;
+use Cosmira\Sandbox\Support\SandboxModelRegistry;
+use Cosmira\Sandbox\Support\SandboxRecordRestorer;
 use Cosmira\Sandbox\Tests\TestCase;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use PHPUnit\Framework\Attributes\Test;
@@ -113,6 +116,23 @@ final class SandboxTest extends TestCase
     }
 
     #[Test]
+    public function itDoesNotResetWhenForceOpeningTheSameOwner(): void
+    {
+        Event::fake([SandboxResetting::class, SandboxOpened::class]);
+
+        $this->createDatabaseUser(1);
+        SandboxStatus::factory()->create([
+            'status'  => SandboxStatusEnum::Locked,
+            'user_id' => 1,
+        ]);
+
+        $this->sandbox->open(1, force: true);
+
+        Event::assertNotDispatched(SandboxResetting::class);
+        Event::assertDispatched(SandboxOpened::class);
+    }
+
+    #[Test]
     public function itCanRollbackChanges(): void
     {
         Event::fake([SandboxResetting::class, SandboxClosed::class]);
@@ -163,6 +183,25 @@ final class SandboxTest extends TestCase
         $this->assertEquals(SandboxOperation::Commit, $status->last_operation);
         $this->assertSame(5, $status->change_id);
         $this->assertInstanceOf(Carbon::class, $status->send_date);
+    }
+
+    #[Test]
+    public function itCommitsAsynchronouslyByDefault(): void
+    {
+        Event::fake([SandboxClosed::class]);
+
+        $this->createDatabaseUser(1);
+        SandboxStatus::factory()->create([
+            'status'  => SandboxStatusEnum::Locked,
+            'user_id' => 1,
+        ]);
+
+        $this->sandbox->close(1, result: SandboxOperation::Commit);
+
+        Event::assertDispatched(
+            SandboxClosed::class,
+            fn (SandboxClosed $event): bool => $event->asyncUpdater === true,
+        );
     }
 
     #[Test]
@@ -219,6 +258,38 @@ final class SandboxTest extends TestCase
         $this->assertInstanceOf(SandboxStatus::class, $status);
         $this->assertEquals(SandboxStatusEnum::Locked, $status->status);
         $this->assertEquals(5, $status->user_id);
+    }
+
+    #[Test]
+    public function itUsesTheInjectedModelRegistry(): void
+    {
+        $models = new TrackingSandboxRegistry();
+        $sandbox = new Sandbox(models: $models);
+
+        $sandbox->models(InjectedSandboxModelStub::class);
+
+        $this->assertSame([[InjectedSandboxModelStub::class]], $models->registeredModels);
+    }
+
+    #[Test]
+    public function itUsesTheInjectedRecordRestorerForSingleModelResets(): void
+    {
+        $recordRestorer = new TrackingSandboxRecordRestorer();
+        $sandbox = new Sandbox(recordRestorer: $recordRestorer);
+        $model = new InjectedSandboxModelStub();
+
+        $sandbox->resetSandboxData($model);
+
+        $this->assertSame([$model], $recordRestorer->restoredModels);
+    }
+
+    #[Test]
+    public function itRejectsNonModelClassesDuringReset(): void
+    {
+        $this->expectException(SandboxException::class);
+        $this->expectExceptionCode(SandboxException::CODE_MODEL_NOT_REGISTERED);
+
+        $this->sandbox->resetSandboxData(NonModelWithSandboxSyncStub::class);
     }
 
     #[Test]
@@ -293,4 +364,44 @@ final class SandboxTest extends TestCase
         $this->assertSame($uuid, $status->user_id);
         $this->assertTrue($status->isOwnedBy($uuid));
     }
+}
+
+class TrackingSandboxRegistry extends SandboxModelRegistry
+{
+    /**
+     * The model batches registered through the injected registry.
+     *
+     * @var array<int, array<int, class-string<Model>>>
+     */
+    public array $registeredModels = [];
+
+    public function register(string ...$models): void
+    {
+        $this->registeredModels[] = $models;
+    }
+}
+
+class TrackingSandboxRecordRestorer extends SandboxRecordRestorer
+{
+    /**
+     * The models restored through the injected restorer.
+     *
+     * @var array<int, Model>
+     */
+    public array $restoredModels = [];
+
+    public function restore(Model $model): void
+    {
+        $this->restoredModels[] = $model;
+    }
+}
+
+class InjectedSandboxModelStub extends Model
+{
+    public static function syncIntoSandbox(): void {}
+}
+
+class NonModelWithSandboxSyncStub
+{
+    public static function syncIntoSandbox(): void {}
 }

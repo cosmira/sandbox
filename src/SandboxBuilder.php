@@ -13,21 +13,18 @@ use Illuminate\Database\Eloquent\Model;
 class SandboxBuilder
 {
     /**
-     * The user ID bound to the builder.
-     */
-    private int|string $userId;
-
-    /**
      * The sandbox service instance.
      */
-    private Sandbox $sandbox;
+    private readonly Sandbox $sandbox;
 
     /**
      * Create a new user-scoped sandbox builder.
      */
-    public function __construct(int|string $userId)
+    public function __construct(/**
+     * The user ID bound to the builder.
+     */
+        private readonly int|string $userId)
     {
-        $this->userId = $userId;
         $this->sandbox = app(Sandbox::class);
     }
 

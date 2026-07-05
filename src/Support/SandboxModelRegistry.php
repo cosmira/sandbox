@@ -15,14 +15,14 @@ class SandboxModelRegistry
     /**
      * The models that belong to the sandbox workflow.
      *
-     * @var array<class-string, true>
+     * @var array<int, class-string<Model>>
      */
     private array $models = [];
 
     /**
      * The models switched to sandbox tables for the current execution context.
      *
-     * @var array<class-string, true>
+     * @var array<int, class-string<Model>>
      */
     private array $switched = [];
 
@@ -37,7 +37,7 @@ class SandboxModelRegistry
             $this->ensureCanUseSandboxTables($model);
             $this->ensureCanSync($model);
 
-            $this->models[$model] = true;
+            $this->remember($this->models, $model);
         }
     }
 
@@ -48,7 +48,7 @@ class SandboxModelRegistry
      */
     public function all(): array
     {
-        return array_keys($this->models);
+        return $this->models;
     }
 
     /**
@@ -63,7 +63,7 @@ class SandboxModelRegistry
         foreach ($models as $model) {
             $this->ensureCanUseSandboxTables($model);
 
-            $this->switched[$model] = true;
+            $this->remember($this->switched, $model);
             $model::useSandboxTable();
         }
     }
@@ -73,7 +73,7 @@ class SandboxModelRegistry
      */
     public function restoreActiveTables(): void
     {
-        foreach (array_keys($this->switched) as $model) {
+        foreach ($this->switched as $model) {
             if ($this->canUseSandboxTables($model)) {
                 $model::useActiveTable();
             }
@@ -154,5 +154,18 @@ class SandboxModelRegistry
             && method_exists($model, 'isUsingSandboxTable')
             && method_exists($model, 'useSandboxTable')
             && method_exists($model, 'useActiveTable');
+    }
+
+    /**
+     * Remember a model once while preserving registration order.
+     *
+     * @param array<int, class-string<Model>> $models
+     * @param class-string<Model>             $model
+     */
+    private function remember(array &$models, string $model): void
+    {
+        if (! in_array($model, $models, true)) {
+            $models[] = $model;
+        }
     }
 }

@@ -9,6 +9,7 @@ use Cosmira\Sandbox\Events\ResolvingSandboxModels;
 use Cosmira\Sandbox\Events\SandboxClosed;
 use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\HasSandbox;
+use Cosmira\Sandbox\Support\SandboxModelRegistry;
 use Cosmira\Sandbox\Tests\TestCase;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -33,6 +34,17 @@ final class ResolvingSandboxModelsTest extends TestCase
         $event->models(SandboxEventModelStub::class);
 
         $this->assertTrue(SandboxEventModelStub::isUsingSandboxTable());
+    }
+
+    #[Test]
+    public function eventUsesTheInjectedRegistry(): void
+    {
+        $registry = new TrackingSandboxEventRegistry();
+        $event = new ResolvingSandboxModels(Request::create('/categories', 'POST'), $registry);
+
+        $event->models(SandboxEventModelStub::class);
+
+        $this->assertSame([[SandboxEventModelStub::class]], $registry->resolvedModels);
     }
 
     #[Test]
@@ -113,6 +125,21 @@ class SandboxEventModelStub extends Model
     use HasSandbox;
 
     protected $table = 'sandbox_event_items';
+}
+
+class TrackingSandboxEventRegistry extends SandboxModelRegistry
+{
+    /**
+     * The model batches requested by the event.
+     *
+     * @var array<int, array<int, class-string>>
+     */
+    public array $resolvedModels = [];
+
+    public function useSandboxTables(string ...$models): void
+    {
+        $this->resolvedModels[] = $models;
+    }
 }
 
 class NonSandboxEventModelStub extends Model
