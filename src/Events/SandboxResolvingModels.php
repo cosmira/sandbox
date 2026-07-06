@@ -8,9 +8,9 @@ use Cosmira\Sandbox\Support\SandboxModelRegistry;
 use Illuminate\Http\Request;
 
 /**
- * Resolve the models that should use sandbox tables for a request.
+ * The sandbox is resolving models that should use draft tables for a request.
  */
-class ResolvingSandboxModels
+class SandboxResolvingModels
 {
     /**
      * The registry that switches models for the current request.
@@ -37,7 +37,7 @@ class ResolvingSandboxModels
      */
     public function models(string ...$models): void
     {
-        $this->registry->useSandboxTables(...$models);
+        $this->registry->useSandbox(...$models);
     }
 
     /**

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Cosmira\Sandbox\Http\Middleware;
 
 use Closure;
-use Cosmira\Sandbox\Events\ResolvingSandboxModels;
+use Cosmira\Sandbox\Events\SandboxResolvingModels;
 use Cosmira\Sandbox\Models\SandboxStatus;
 use Cosmira\Sandbox\Sandbox;
 use Cosmira\Sandbox\Support\SandboxModelRegistry;
@@ -46,11 +46,11 @@ class SandboxMiddleware
         $status = SandboxStatus::first();
 
         if ($this->isWriteRequest($request)) {
-            $status = $this->openSandboxIfFree($request, $status);
+            $status = $this->prepareSandboxForWrite($request, $status);
             $this->ensureWriteIsAllowed($request, $status);
         }
 
-        if ($this->shouldUseSandbox($status)) {
+        if ($this->sandboxIsActive($status)) {
             $this->resolveSandboxModels($request);
         }
 
@@ -62,23 +62,15 @@ class SandboxMiddleware
      */
     public function terminate(Request $request, mixed $response): void
     {
-        ResolvingSandboxModels::restoreActiveTables();
+        SandboxResolvingModels::restoreActiveTables();
     }
 
     /**
-     * Determine if the request should switch models to sandbox tables.
+     * Open or resume the sandbox for the current write request user.
      */
-    private function shouldUseSandbox(?SandboxStatus $status): bool
+    private function prepareSandboxForWrite(Request $request, ?SandboxStatus $status): ?SandboxStatus
     {
-        return $this->sandboxIsActive($status);
-    }
-
-    /**
-     * Open a free sandbox for the current write request user.
-     */
-    private function openSandboxIfFree(Request $request, ?SandboxStatus $status): ?SandboxStatus
-    {
-        if ($status === null || ! $status->isFree()) {
+        if ($status === null || $status->isLocked()) {
             return $status;
         }
 
@@ -89,6 +81,10 @@ class SandboxMiddleware
             403,
             'An authenticated user is required to open the sandbox.',
         );
+
+        if (! $status->isFree() && ! $status->isForUser($userId)) {
+            return $status;
+        }
 
         $this->sandbox->open($userId);
 
@@ -122,7 +118,7 @@ class SandboxMiddleware
             return false;
         }
 
-        return $status->isOwnedBy($userId);
+        return $status->isForUser($userId);
     }
 
     /**
@@ -130,9 +126,9 @@ class SandboxMiddleware
      */
     private function resolveSandboxModels(Request $request): void
     {
-        $this->models->useSandboxTables();
+        $this->models->useSandbox();
 
-        Event::dispatch(new ResolvingSandboxModels($request, $this->models));
+        Event::dispatch(new SandboxResolvingModels($request, $this->models));
     }
 
     /**

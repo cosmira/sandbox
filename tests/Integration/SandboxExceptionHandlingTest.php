@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Cosmira\Sandbox\Tests\Integration;
 
-use Cosmira\Sandbox\Enums\SandboxOperation;
 use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
 use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\Models\SandboxStatus;
@@ -53,7 +52,7 @@ final class SandboxExceptionHandlingTest extends TestCase
         ]);
 
         $this->expectException(SandboxException::class);
-        $this->sandbox->close(1, SandboxOperation::Rollback);
+        $this->sandbox->rollback(1);
     }
 
     /**
@@ -72,7 +71,7 @@ final class SandboxExceptionHandlingTest extends TestCase
         ]);
 
         $this->expectException(SandboxException::class);
-        $this->sandbox->close(2, SandboxOperation::Commit);
+        $this->sandbox->commit(2);
     }
 
     /**
@@ -89,7 +88,7 @@ final class SandboxExceptionHandlingTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $this->sandbox->close(2, SandboxOperation::Rollback);
+        $this->sandbox->rollback(2);
 
         $status = SandboxStatus::first();
         $this->assertSame(SandboxStatusEnum::Free, $status->status);
@@ -107,7 +106,7 @@ final class SandboxExceptionHandlingTest extends TestCase
         ]);
 
         // Should NOT throw - int 1 casts to string '1'
-        $this->sandbox->close(1, SandboxOperation::Rollback);
+        $this->sandbox->rollback(1);
 
         $status = SandboxStatus::first();
         $this->assertSame(SandboxStatusEnum::Free, $status->status);
@@ -176,7 +175,7 @@ final class SandboxExceptionHandlingTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $this->sandbox->close(1, SandboxOperation::Save, note: 'Closing note');
+        $this->sandbox->save(1, note: 'Closing note');
 
         $status = SandboxStatus::first();
         $this->assertSame('Closing note', $status->note);

@@ -40,12 +40,12 @@ final class HasSandboxCompositeKeyTest extends TestCase
     }
 
     #[Test]
-    public function syncIntoSandboxWithCompositeKeyCopiesRows(): void
+    public function resetSandboxWithCompositeKeyCopiesRows(): void
     {
         DB::table('test_pivot')->insert(['a' => 'x', 'b' => 'y', 'value' => 'v1']);
         DB::table('test_pivot')->insert(['a' => 'p', 'b' => 'q', 'value' => 'v2']);
 
-        PivotModelStub::syncIntoSandbox();
+        PivotModelStub::resetSandbox();
 
         $this->assertSame(2, DB::table('test_pivot_sb')->count());
         $this->assertSame(
@@ -63,12 +63,12 @@ final class HasSandboxCompositeKeyTest extends TestCase
     }
 
     #[Test]
-    public function syncIntoSandboxWithCompositeKeyRemovesOrphans(): void
+    public function resetSandboxWithCompositeKeyRemovesOrphans(): void
     {
         DB::table('test_pivot')->insert(['a' => 'x', 'b' => 'y', 'value' => 'v1']);
         DB::table('test_pivot_sb')->insert(['a' => 'orphan', 'b' => 'sb', 'value' => 'old']);
 
-        PivotModelStub::syncIntoSandbox();
+        PivotModelStub::resetSandbox();
 
         $this->assertSame(1, DB::table('test_pivot_sb')->count());
         $this->assertNotInstanceOf(
@@ -80,11 +80,11 @@ final class HasSandboxCompositeKeyTest extends TestCase
     }
 
     #[Test]
-    public function syncIntoActiveWithCompositeKeyCopiesRows(): void
+    public function applySandboxWithCompositeKeyCopiesRows(): void
     {
         DB::table('test_pivot_sb')->insert(['a' => 'x', 'b' => 'y', 'value' => 'from_sb']);
 
-        PivotModelStub::syncIntoActive();
+        PivotModelStub::applySandbox();
 
         $this->assertSame(1, DB::table('test_pivot')->count());
         $this->assertSame(

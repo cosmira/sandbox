@@ -12,7 +12,7 @@ use PHPUnit\Framework\Attributes\Test;
 final class SandboxResetApplyTest extends TestCase
 {
     #[Test]
-    public function resetSandboxDataThrowsWhenModelHasNoSyncIntoSandbox(): void
+    public function resetSandboxDataThrowsWhenModelCannotResetSandbox(): void
     {
         $sandbox = resolve(Sandbox::class);
         $this->expectException(SandboxException::class);

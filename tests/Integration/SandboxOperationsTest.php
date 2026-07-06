@@ -51,7 +51,7 @@ final class SandboxOperationsTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $this->sandbox->close(1, SandboxOperation::Rollback);
+        $this->sandbox->rollback(1);
 
         $status = SandboxStatus::first();
         $this->assertSame(SandboxStatusEnum::Free, $status->status);
@@ -69,7 +69,7 @@ final class SandboxOperationsTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $this->sandbox->close(1, SandboxOperation::Commit);
+        $this->sandbox->commit(1);
 
         $status = SandboxStatus::first();
         $this->assertSame(SandboxStatusEnum::Free, $status->status);
@@ -87,7 +87,7 @@ final class SandboxOperationsTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $this->sandbox->close(1, SandboxOperation::Save);
+        $this->sandbox->save(1);
 
         $status = SandboxStatus::first();
         $this->assertSame(SandboxStatusEnum::Saved, $status->status);
@@ -171,7 +171,7 @@ final class SandboxOperationsTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $this->sandbox->close(1, SandboxOperation::Rollback);
+        $this->sandbox->rollback(1);
 
         $status = SandboxStatus::first();
         $this->assertSame(SandboxOperation::Rollback, $status->last_operation);
@@ -189,7 +189,7 @@ final class SandboxOperationsTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $this->sandbox->close(1, SandboxOperation::Commit);
+        $this->sandbox->commit(1);
 
         $status = SandboxStatus::first();
         $this->assertNotNull($status->send_date);
@@ -205,7 +205,7 @@ final class SandboxOperationsTest extends TestCase
             'change_id' => 5,
         ]);
 
-        $this->sandbox->close(1, SandboxOperation::Rollback);
+        $this->sandbox->rollback(1);
 
         $status = SandboxStatus::first();
         $this->assertSame(6, $status->change_id);
@@ -215,7 +215,7 @@ final class SandboxOperationsTest extends TestCase
      * Test asyncUpdater parameter usage.
      */
     #[Test]
-    public function closeWithAsyncUpdaterTrue(): void
+    public function commitWithAsyncUpdaterTrue(): void
     {
         $this->createDatabaseUser(1);
         SandboxStatus::factory()->create([
@@ -223,7 +223,7 @@ final class SandboxOperationsTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $this->sandbox->close(1, SandboxOperation::Rollback, asyncUpdater: true);
+        $this->sandbox->commit(1, asyncUpdater: true);
 
         $status = SandboxStatus::first();
         $this->assertSame(SandboxStatusEnum::Free, $status->status);
@@ -233,7 +233,7 @@ final class SandboxOperationsTest extends TestCase
      * Test asyncUpdater parameter with false.
      */
     #[Test]
-    public function closeWithAsyncUpdaterFalse(): void
+    public function commitWithAsyncUpdaterFalse(): void
     {
         $this->createDatabaseUser(1);
         SandboxStatus::factory()->create([
@@ -241,7 +241,7 @@ final class SandboxOperationsTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $this->sandbox->close(1, SandboxOperation::Rollback, asyncUpdater: false);
+        $this->sandbox->commit(1, asyncUpdater: false);
 
         $status = SandboxStatus::first();
         $this->assertSame(SandboxStatusEnum::Free, $status->status);

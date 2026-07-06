@@ -46,7 +46,6 @@ class StatusSandboxCommand extends Command
         }
 
         if ($this->option('details')) {
-            $this->line('');
             $this->line('Detailed Information:');
             $this->table(['Key', 'Value'], [
                 ['Status Code', $status->status->name],

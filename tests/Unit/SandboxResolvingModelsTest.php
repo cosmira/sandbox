@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Cosmira\Sandbox\Tests\Unit;
 
-use Cosmira\Sandbox\Enums\SandboxOperation;
-use Cosmira\Sandbox\Events\ResolvingSandboxModels;
-use Cosmira\Sandbox\Events\SandboxClosed;
+use Cosmira\Sandbox\Events\SandboxResolvingModels;
+use Cosmira\Sandbox\Events\SandboxRolledBack;
+use Cosmira\Sandbox\Events\SandboxSaved;
 use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\HasSandbox;
 use Cosmira\Sandbox\Support\SandboxModelRegistry;
@@ -16,31 +16,31 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
 use PHPUnit\Framework\Attributes\Test;
 
-final class ResolvingSandboxModelsTest extends TestCase
+final class SandboxResolvingModelsTest extends TestCase
 {
     protected function setUp(): void
     {
         parent::setUp();
 
-        ResolvingSandboxModels::restoreActiveTables();
-        SandboxEventModelStub::useActiveTable();
+        SandboxResolvingModels::restoreActiveTables();
+        SandboxEventModelStub::useActive();
     }
 
     #[Test]
     public function eventSwitchesModelsToSandboxTables(): void
     {
-        $event = new ResolvingSandboxModels(Request::create('/categories', 'POST'));
+        $event = new SandboxResolvingModels(Request::create('/categories', 'POST'));
 
         $event->models(SandboxEventModelStub::class);
 
-        $this->assertTrue(SandboxEventModelStub::isUsingSandboxTable());
+        $this->assertTrue(SandboxEventModelStub::isUsingSandbox());
     }
 
     #[Test]
     public function eventUsesTheInjectedRegistry(): void
     {
         $registry = new TrackingSandboxEventRegistry();
-        $event = new ResolvingSandboxModels(Request::create('/categories', 'POST'), $registry);
+        $event = new SandboxResolvingModels(Request::create('/categories', 'POST'), $registry);
 
         $event->models(SandboxEventModelStub::class);
 
@@ -50,7 +50,7 @@ final class ResolvingSandboxModelsTest extends TestCase
     #[Test]
     public function eventRejectsClassesThatCannotSwitchTables(): void
     {
-        $event = new ResolvingSandboxModels(Request::create('/categories', 'POST'));
+        $event = new SandboxResolvingModels(Request::create('/categories', 'POST'));
 
         $this->expectException(SandboxException::class);
         $this->expectExceptionCode(SandboxException::CODE_MODEL_NOT_REGISTERED);
@@ -61,7 +61,7 @@ final class ResolvingSandboxModelsTest extends TestCase
     #[Test]
     public function eventRejectsPartialSandboxApiClasses(): void
     {
-        $event = new ResolvingSandboxModels(Request::create('/categories', 'POST'));
+        $event = new SandboxResolvingModels(Request::create('/categories', 'POST'));
 
         foreach ([
             PartialSandboxEventModelWithUseOnlyStub::class,
@@ -84,39 +84,35 @@ final class ResolvingSandboxModelsTest extends TestCase
     }
 
     #[Test]
-    public function sandboxClosedRestoresResolvedModels(): void
+    public function sandboxRolledBackRestoresResolvedModels(): void
     {
-        $event = new ResolvingSandboxModels(Request::create('/categories', 'POST'));
+        $event = new SandboxResolvingModels(Request::create('/categories', 'POST'));
         $event->models(SandboxEventModelStub::class);
 
-        Event::dispatch(new SandboxClosed(
+        Event::dispatch(new SandboxRolledBack(
             userId: 1,
-            result: SandboxOperation::Rollback,
-            closedAt: now(),
+            rolledBackAt: now(),
             note: null,
-            asyncUpdater: false,
         ));
 
-        $this->assertFalse(SandboxEventModelStub::isUsingSandboxTable());
+        $this->assertFalse(SandboxEventModelStub::isUsingSandbox());
     }
 
     #[Test]
     public function sandboxSaveKeepsResolvedModelsInSandboxMode(): void
     {
-        $event = new ResolvingSandboxModels(Request::create('/categories', 'POST'));
+        $event = new SandboxResolvingModels(Request::create('/categories', 'POST'));
         $event->models(SandboxEventModelStub::class);
 
-        Event::dispatch(new SandboxClosed(
+        Event::dispatch(new SandboxSaved(
             userId: 1,
-            result: SandboxOperation::Save,
-            closedAt: now(),
+            savedAt: now(),
             note: null,
-            asyncUpdater: false,
         ));
 
-        $this->assertTrue(SandboxEventModelStub::isUsingSandboxTable());
+        $this->assertTrue(SandboxEventModelStub::isUsingSandbox());
 
-        ResolvingSandboxModels::restoreActiveTables();
+        SandboxResolvingModels::restoreActiveTables();
     }
 }
 
@@ -136,7 +132,7 @@ class TrackingSandboxEventRegistry extends SandboxModelRegistry
      */
     public array $resolvedModels = [];
 
-    public function useSandboxTables(string ...$models): void
+    public function useSandbox(string ...$models): void
     {
         $this->resolvedModels[] = $models;
     }
@@ -149,27 +145,27 @@ class NonSandboxEventModelStub extends Model
 
 class PartialSandboxEventModelWithUseOnlyStub extends Model
 {
-    public static function useSandboxTable(): void {}
+    public static function useSandbox(): void {}
 
-    public static function useActiveTable(): void {}
+    public static function useActive(): void {}
 }
 
 class PartialSandboxEventModelWithActiveOnlyStub extends Model
 {
-    public static function isUsingSandboxTable(): bool
+    public static function isUsingSandbox(): bool
     {
         return true;
     }
 
-    public static function useActiveTable(): void {}
+    public static function useActive(): void {}
 }
 
 class PartialSandboxEventModelWithoutUseStub extends Model
 {
-    public static function isUsingSandboxTable(): bool
+    public static function isUsingSandbox(): bool
     {
         return false;
     }
 
-    public static function useActiveTable(): void {}
+    public static function useActive(): void {}
 }

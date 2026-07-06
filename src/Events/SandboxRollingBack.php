@@ -8,9 +8,9 @@ use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * Sandbox draft tables are about to be reset from active data.
+ * The sandbox draft is about to be rolled back from active data.
  */
-class SandboxResetting
+class SandboxRollingBack
 {
     use Dispatchable;
     use SerializesModels;

@@ -107,11 +107,19 @@ class SandboxStatus extends Model
     }
 
     /**
+     * Determine if the persisted sandbox row belongs to the given user.
+     */
+    public function isForUser(int|string $userId): bool
+    {
+        return (string) $this->user_id === (string) $userId;
+    }
+
+    /**
      * Determine if the sandbox is locked by the given user.
      */
-    public function isOwnedBy(int|string $userId): bool
+    public function isLockedBy(int|string $userId): bool
     {
-        return $this->isLocked() && (string) $this->user_id === (string) $userId;
+        return $this->isLocked() && $this->isForUser($userId);
     }
 
     /**

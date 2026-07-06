@@ -176,14 +176,14 @@ class BenchmarkSyncCommand extends Command
      */
     protected function benchmarkActiveToSandbox(): void
     {
-        $this->refreshTables();
+        $this->resetTables();
 
         $this->insertTestData($this->activeTable);
         $this->insertSandboxTestData($this->sandboxTable);
 
-        BenchmarkItem::syncIntoSandbox();
+        BenchmarkItem::resetSandbox();
 
-        $this->refreshTables();
+        $this->resetTables();
     }
 
     /**
@@ -191,20 +191,20 @@ class BenchmarkSyncCommand extends Command
      */
     protected function benchmarkSandboxToActive(): void
     {
-        $this->refreshTables();
+        $this->resetTables();
 
         $this->insertTestData($this->activeTable);
         $this->insertSandboxTestData($this->sandboxTable);
 
-        BenchmarkItem::syncIntoActive();
+        BenchmarkItem::applySandbox();
 
-        $this->refreshTables();
+        $this->resetTables();
     }
 
     /**
      * Truncate both benchmark tables.
      */
-    protected function refreshTables(): void
+    protected function resetTables(): void
     {
         DB::table($this->activeTable)->delete();
         DB::table($this->sandboxTable)->delete();

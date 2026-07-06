@@ -8,9 +8,9 @@ use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * The sandbox should be applied to the active tables.
+ * The sandbox draft is about to be committed to active data.
  */
-class SandboxApplying
+class SandboxCommitting
 {
     use Dispatchable;
     use SerializesModels;

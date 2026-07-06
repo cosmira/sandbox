@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Cosmira\Sandbox\Tests\Unit;
 
 use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
-use Cosmira\Sandbox\Events\ResolvingSandboxModels;
+use Cosmira\Sandbox\Events\SandboxResolvingModels;
 use Cosmira\Sandbox\HasSandbox;
 use Cosmira\Sandbox\Http\Middleware\SandboxMiddleware;
 use Cosmira\Sandbox\Models\SandboxStatus;
@@ -26,27 +26,27 @@ final class SandboxMiddlewareTest extends TestCase
     {
         parent::setUp();
 
-        ResolvingSandboxModels::restoreActiveTables();
-        MiddlewareSandboxModelStub::useActiveTable();
+        SandboxResolvingModels::restoreActiveTables();
+        MiddlewareSandboxModelStub::useActive();
     }
 
     #[Test]
     public function readRequestsKeepModelsOnActiveTablesWhenSandboxIsFree(): void
     {
         SandboxStatus::query()->update(['status' => SandboxStatusEnum::Free]);
-        Event::fake([ResolvingSandboxModels::class]);
+        Event::fake([SandboxResolvingModels::class]);
 
         $middleware = new SandboxMiddleware();
         $request = Request::create('/categories', 'GET');
 
         $middleware->handle($request, function (): string {
-            $this->assertFalse(MiddlewareSandboxModelStub::isUsingSandboxTable());
+            $this->assertFalse(MiddlewareSandboxModelStub::isUsingSandbox());
 
             return 'response';
         });
 
-        $this->assertFalse(MiddlewareSandboxModelStub::isUsingSandboxTable());
-        Event::assertNotDispatched(ResolvingSandboxModels::class);
+        $this->assertFalse(MiddlewareSandboxModelStub::isUsingSandbox());
+        Event::assertNotDispatched(SandboxResolvingModels::class);
     }
 
     #[Test]
@@ -54,8 +54,8 @@ final class SandboxMiddlewareTest extends TestCase
     {
         SandboxStatus::query()->update(['status' => SandboxStatusEnum::Locked]);
 
-        Event::listen(ResolvingSandboxModels::class, function (
-            ResolvingSandboxModels $event,
+        Event::listen(SandboxResolvingModels::class, function (
+            SandboxResolvingModels $event,
         ): void {
             $event->models(MiddlewareSandboxModelStub::class);
         });
@@ -64,26 +64,26 @@ final class SandboxMiddlewareTest extends TestCase
         $request = Request::create('/categories', 'GET');
 
         $middleware->handle($request, function (): string {
-            $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandboxTable());
+            $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandbox());
 
             return 'response';
         });
 
-        $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandboxTable());
+        $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandbox());
     }
 
     #[Test]
     public function readRequestsResolveSandboxModelsWhenSandboxIsActive(): void
     {
         SandboxStatus::query()->update(['status' => SandboxStatusEnum::Saved]);
-        Event::fake([ResolvingSandboxModels::class]);
+        Event::fake([SandboxResolvingModels::class]);
 
         $middleware = new SandboxMiddleware();
         $request = Request::create('/categories', 'GET');
 
         $middleware->handle($request, fn (): string => 'response');
 
-        Event::assertDispatched(ResolvingSandboxModels::class);
+        Event::assertDispatched(SandboxResolvingModels::class);
     }
 
     #[Test]
@@ -113,20 +113,20 @@ final class SandboxMiddlewareTest extends TestCase
         $request = Request::create('/categories', 'POST');
         $request->setUserResolver(fn () => $user);
 
-        Event::listen(ResolvingSandboxModels::class, function (
-            ResolvingSandboxModels $event,
+        Event::listen(SandboxResolvingModels::class, function (
+            SandboxResolvingModels $event,
         ): void {
             $event->models(MiddlewareSandboxModelStub::class);
         });
 
         $response = $middleware->handle($request, function (): string {
-            $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandboxTable());
+            $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandbox());
 
             return 'response';
         });
 
         $this->assertSame('response', $response);
-        $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandboxTable());
+        $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandbox());
     }
 
     #[Test]
@@ -142,14 +142,14 @@ final class SandboxMiddlewareTest extends TestCase
         $request = Request::create('/categories', 'POST');
         $request->setUserResolver(fn () => $user);
 
-        Event::listen(ResolvingSandboxModels::class, function (
-            ResolvingSandboxModels $event,
+        Event::listen(SandboxResolvingModels::class, function (
+            SandboxResolvingModels $event,
         ): void {
             $event->models(MiddlewareSandboxModelStub::class);
         });
 
         $response = $middleware->handle($request, function (): string {
-            $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandboxTable());
+            $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandbox());
 
             return 'response';
         });
@@ -202,6 +202,63 @@ final class SandboxMiddlewareTest extends TestCase
     }
 
     #[Test]
+    public function writeRequestsReopenSavedDraftsForTheOwner(): void
+    {
+        SandboxStatus::query()->update([
+            'status'  => SandboxStatusEnum::Saved,
+            'user_id' => 1,
+        ]);
+
+        $middleware = new SandboxMiddleware();
+        $user = $this->createUser(id: 1);
+        $request = Request::create('/categories', 'PATCH');
+        $request->setUserResolver(fn () => $user);
+
+        Event::listen(SandboxResolvingModels::class, function (
+            SandboxResolvingModels $event,
+        ): void {
+            $event->models(MiddlewareSandboxModelStub::class);
+        });
+
+        $response = $middleware->handle($request, function (): string {
+            $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandbox());
+
+            return 'response';
+        });
+
+        $status = SandboxStatus::first();
+
+        $this->assertSame('response', $response);
+        $this->assertTrue($status?->isLocked());
+        $this->assertSame('1', (string) $status?->user_id);
+    }
+
+    #[Test]
+    public function writeRequestsRejectSavedDraftsOwnedByAnotherUser(): void
+    {
+        SandboxStatus::query()->update([
+            'status'  => SandboxStatusEnum::Saved,
+            'user_id' => 1,
+        ]);
+
+        $middleware = new SandboxMiddleware();
+        $user = $this->createUser(id: 2);
+        $request = Request::create('/categories', 'PATCH');
+        $request->setUserResolver(fn () => $user);
+
+        try {
+            $middleware->handle($request, fn (): string => 'response');
+        } catch (HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+            $this->assertTrue(SandboxStatus::first()?->isSaved());
+
+            return;
+        }
+
+        $this->fail('Request modified another user saved draft.');
+    }
+
+    #[Test]
     public function writeRequestsAreRejectedForGuestsWhenSandboxIsFree(): void
     {
         SandboxStatus::query()->update([
@@ -236,14 +293,14 @@ final class SandboxMiddlewareTest extends TestCase
         $request = Request::create('/categories', 'POST');
         $request->setUserResolver(fn () => $this->createUser(id: 1));
 
-        Event::listen(ResolvingSandboxModels::class, function (
-            ResolvingSandboxModels $event,
+        Event::listen(SandboxResolvingModels::class, function (
+            SandboxResolvingModels $event,
         ): void {
             $event->models(MiddlewareSandboxModelStub::class);
         });
 
         $response = $middleware->handle($request, function (): string {
-            $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandboxTable());
+            $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandbox());
 
             return 'response';
         });
@@ -280,8 +337,8 @@ final class SandboxMiddlewareTest extends TestCase
         $request = Request::create('/categories', 'POST');
         $request->setUserResolver(fn () => $this->createUser(id: 2));
 
-        Event::listen(ResolvingSandboxModels::class, function (
-            ResolvingSandboxModels $event,
+        Event::listen(SandboxResolvingModels::class, function (
+            SandboxResolvingModels $event,
         ): void {
             $event->models(MiddlewareSandboxModelStub::class);
         });
@@ -290,7 +347,7 @@ final class SandboxMiddlewareTest extends TestCase
             $middleware->handle($request, fn (): string => 'response');
         } catch (HttpException $exception) {
             $this->assertSame(403, $exception->getStatusCode());
-            $this->assertFalse(MiddlewareSandboxModelStub::isUsingSandboxTable());
+            $this->assertFalse(MiddlewareSandboxModelStub::isUsingSandbox());
 
             return;
         }
@@ -349,25 +406,25 @@ final class SandboxMiddlewareTest extends TestCase
             'user_id' => 1,
         ]);
 
-        MiddlewareSandboxModelStub::useSandboxTable();
+        MiddlewareSandboxModelStub::useSandbox();
 
         $middleware = new SandboxMiddleware();
         $request = Request::create('/categories/1', 'DELETE');
         $request->setUserResolver(fn () => $this->createUser(id: 1));
 
-        Event::listen(ResolvingSandboxModels::class, function (
-            ResolvingSandboxModels $event,
+        Event::listen(SandboxResolvingModels::class, function (
+            SandboxResolvingModels $event,
         ): void {
             $event->models(MiddlewareSandboxModelStub::class);
         });
 
         $middleware->handle($request, function (): string {
-            $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandboxTable());
+            $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandbox());
 
             return 'response';
         });
 
-        $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandboxTable());
+        $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandbox());
     }
 
     #[Test]
@@ -384,8 +441,8 @@ final class SandboxMiddlewareTest extends TestCase
         $request = Request::create('/categories/1', 'PATCH');
         $request->setUserResolver(fn () => $this->createUser(id: 1));
 
-        Event::listen(ResolvingSandboxModels::class, function (
-            ResolvingSandboxModels $event,
+        Event::listen(SandboxResolvingModels::class, function (
+            SandboxResolvingModels $event,
         ): void {
             $event->models(MiddlewareSandboxModelStub::class);
         });
@@ -395,7 +452,7 @@ final class SandboxMiddlewareTest extends TestCase
                 throw new RuntimeException('Request failed.');
             });
         } finally {
-            $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandboxTable());
+            $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandbox());
         }
     }
 
@@ -411,23 +468,23 @@ final class SandboxMiddlewareTest extends TestCase
         $request = Request::create('/categories/1', 'PATCH');
         $request->setUserResolver(fn () => $this->createUser(id: 1));
 
-        Event::listen(ResolvingSandboxModels::class, function (
-            ResolvingSandboxModels $event,
+        Event::listen(SandboxResolvingModels::class, function (
+            SandboxResolvingModels $event,
         ): void {
             $event->models(MiddlewareSandboxModelStub::class);
         });
 
         $response = $middleware->handle($request, function (): string {
-            $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandboxTable());
+            $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandbox());
 
             return 'response';
         });
 
-        $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandboxTable());
+        $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandbox());
 
         $middleware->terminate($request, $response);
 
-        $this->assertFalse(MiddlewareSandboxModelStub::isUsingSandboxTable());
+        $this->assertFalse(MiddlewareSandboxModelStub::isUsingSandbox());
         $this->assertTrue(SandboxStatus::first()?->isLocked());
     }
 }
@@ -448,7 +505,7 @@ class TrackingSandboxMiddlewareRegistry extends SandboxModelRegistry
      */
     public array $resolvedModels = [];
 
-    public function useSandboxTables(string ...$models): void
+    public function useSandbox(string ...$models): void
     {
         $this->resolvedModels[] = $models;
     }

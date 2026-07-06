@@ -154,11 +154,11 @@ final class TestingHelpersTest extends TestCase
     {
         $this->useSandbox(HelperSwitchModelStub::class);
 
-        $this->assertTrue(HelperSwitchModelStub::isUsingSandboxTable());
+        $this->assertTrue(HelperSwitchModelStub::isUsingSandbox());
 
         $this->useActive(HelperSwitchModelStub::class);
 
-        $this->assertFalse(HelperSwitchModelStub::isUsingSandboxTable());
+        $this->assertFalse(HelperSwitchModelStub::isUsingSandbox());
     }
 
     #[Test]
@@ -199,22 +199,22 @@ class HelperSwitchModelStub extends Model
 
     public static bool $usingSandboxTable = false;
 
-    public static function useSandboxTable(): void
+    public static function useSandbox(): void
     {
         self::$usingSandboxTable = true;
     }
 
-    public static function useActiveTable(): void
+    public static function useActive(): void
     {
         self::$usingSandboxTable = false;
     }
 
-    public static function isUsingSandboxTable(): bool
+    public static function isUsingSandbox(): bool
     {
         return self::$usingSandboxTable;
     }
 
-    public static function syncIntoSandbox(): void
+    public static function resetSandbox(): void
     {
         self::$synced = true;
     }

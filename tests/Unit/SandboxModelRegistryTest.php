@@ -43,7 +43,7 @@ final class SandboxModelRegistryTest extends TestCase
         $registry = new SandboxModelRegistry();
         $registry->register(RegistrySandboxModelStub::class);
 
-        $registry->useSandboxTables();
+        $registry->useSandbox();
 
         $this->assertTrue(RegistrySandboxModelStub::$usingSandboxTable);
         $this->assertFalse(OtherRegistrySandboxModelStub::$usingSandboxTable);
@@ -60,13 +60,13 @@ final class SandboxModelRegistryTest extends TestCase
         $registry = new SandboxModelRegistry();
         $registry->register(RegistrySandboxModelStub::class);
 
-        $registry->syncIntoSandbox();
-        $registry->syncIntoActive();
+        $registry->resetSandbox();
+        $registry->applySandbox();
 
-        $this->assertSame(1, RegistrySandboxModelStub::$syncIntoSandboxCalls);
-        $this->assertSame(1, RegistrySandboxModelStub::$syncIntoActiveCalls);
-        $this->assertSame(0, OtherRegistrySandboxModelStub::$syncIntoSandboxCalls);
-        $this->assertSame(0, OtherRegistrySandboxModelStub::$syncIntoActiveCalls);
+        $this->assertSame(1, RegistrySandboxModelStub::$resetSandboxCalls);
+        $this->assertSame(1, RegistrySandboxModelStub::$applySandboxCalls);
+        $this->assertSame(0, OtherRegistrySandboxModelStub::$resetSandboxCalls);
+        $this->assertSame(0, OtherRegistrySandboxModelStub::$applySandboxCalls);
     }
 
     #[Test]
@@ -118,40 +118,40 @@ class RegistrySandboxModelStub extends Model
 {
     public static bool $usingSandboxTable = false;
 
-    public static int $syncIntoSandboxCalls = 0;
+    public static int $resetSandboxCalls = 0;
 
-    public static int $syncIntoActiveCalls = 0;
+    public static int $applySandboxCalls = 0;
 
     public static function resetState(): void
     {
         static::$usingSandboxTable = false;
-        static::$syncIntoSandboxCalls = 0;
-        static::$syncIntoActiveCalls = 0;
+        static::$resetSandboxCalls = 0;
+        static::$applySandboxCalls = 0;
     }
 
-    public static function isUsingSandboxTable(): bool
+    public static function isUsingSandbox(): bool
     {
         return static::$usingSandboxTable;
     }
 
-    public static function useSandboxTable(): void
+    public static function useSandbox(): void
     {
         static::$usingSandboxTable = true;
     }
 
-    public static function useActiveTable(): void
+    public static function useActive(): void
     {
         static::$usingSandboxTable = false;
     }
 
-    public static function syncIntoSandbox(): void
+    public static function resetSandbox(): void
     {
-        static::$syncIntoSandboxCalls++;
+        static::$resetSandboxCalls++;
     }
 
-    public static function syncIntoActive(): void
+    public static function applySandbox(): void
     {
-        static::$syncIntoActiveCalls++;
+        static::$applySandboxCalls++;
     }
 }
 
@@ -159,56 +159,56 @@ class OtherRegistrySandboxModelStub extends RegistrySandboxModelStub
 {
     public static bool $usingSandboxTable = false;
 
-    public static int $syncIntoSandboxCalls = 0;
+    public static int $resetSandboxCalls = 0;
 
-    public static int $syncIntoActiveCalls = 0;
+    public static int $applySandboxCalls = 0;
 }
 
 class RegistryModelWithoutSwitchingApiStub extends Model
 {
-    public static function syncIntoSandbox(): void {}
+    public static function resetSandbox(): void {}
 
-    public static function syncIntoActive(): void {}
+    public static function applySandbox(): void {}
 }
 
 class RegistryModelWithoutSyncApiStub extends Model
 {
-    public static function isUsingSandboxTable(): bool
+    public static function isUsingSandbox(): bool
     {
         return false;
     }
 
-    public static function useSandboxTable(): void {}
+    public static function useSandbox(): void {}
 
-    public static function useActiveTable(): void {}
+    public static function useActive(): void {}
 }
 
 class RegistryModelWithoutActiveSyncApiStub extends Model
 {
-    public static function isUsingSandboxTable(): bool
+    public static function isUsingSandbox(): bool
     {
         return false;
     }
 
-    public static function useSandboxTable(): void {}
+    public static function useSandbox(): void {}
 
-    public static function useActiveTable(): void {}
+    public static function useActive(): void {}
 
-    public static function syncIntoSandbox(): void {}
+    public static function resetSandbox(): void {}
 }
 
 class RegistryNonModelSandboxApiStub
 {
-    public static function isUsingSandboxTable(): bool
+    public static function isUsingSandbox(): bool
     {
         return false;
     }
 
-    public static function useSandboxTable(): void {}
+    public static function useSandbox(): void {}
 
-    public static function useActiveTable(): void {}
+    public static function useActive(): void {}
 
-    public static function syncIntoSandbox(): void {}
+    public static function resetSandbox(): void {}
 
-    public static function syncIntoActive(): void {}
+    public static function applySandbox(): void {}
 }

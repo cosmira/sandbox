@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Cosmira\Sandbox\Tests\Integration;
 
-use Cosmira\Sandbox\Enums\SandboxOperation;
 use Cosmira\Sandbox\HasSandbox;
 use Cosmira\Sandbox\Http\Middleware\SandboxMiddleware;
 use Cosmira\Sandbox\Sandbox;
@@ -23,7 +22,7 @@ final class ConfigurationWorkflowTest extends TestCase
     {
         parent::setUp();
 
-        ConfigurationModelStub::useActiveTable();
+        ConfigurationModelStub::useActive();
 
         Schema::dropIfExists('configuration_items_sb');
         Schema::dropIfExists('configuration_items');
@@ -59,7 +58,7 @@ final class ConfigurationWorkflowTest extends TestCase
         $middleware = new SandboxMiddleware();
 
         app(Sandbox::class)->open($owner);
-        ConfigurationModelStub::syncIntoSandbox();
+        ConfigurationModelStub::resetSandbox();
 
         $ownerRequest = Request::create('/configuration/1', 'PATCH');
         $ownerRequest->setUserResolver(fn () => $owner);
@@ -118,7 +117,7 @@ final class ConfigurationWorkflowTest extends TestCase
                 ]);
         });
 
-        app(Sandbox::class)->close($owner->getKey(), SandboxOperation::Commit);
+        app(Sandbox::class)->commit($owner->getKey());
 
         $this->assertSame('Committed', DB::table('configuration_items')->value('value'));
     }
@@ -130,15 +129,14 @@ final class ConfigurationWorkflowTest extends TestCase
 
         app(Sandbox::class)->open($owner);
 
-        DB::table('configuration_items_sb')->insert([
-            'id'         => 1,
-            'name'       => 'site_name',
-            'value'      => 'Draft',
-            'created_at' => now(),
-            'updated_at' => now()->addMinute(),
-        ]);
+        DB::table('configuration_items_sb')
+            ->where('id', 1)
+            ->update([
+                'value'      => 'Draft',
+                'updated_at' => now()->addMinute(),
+            ]);
 
-        app(Sandbox::class)->close($owner->getKey(), SandboxOperation::Rollback);
+        app(Sandbox::class)->rollback($owner->getKey());
 
         $this->assertSame('Active', DB::table('configuration_items_sb')->value('value'));
     }

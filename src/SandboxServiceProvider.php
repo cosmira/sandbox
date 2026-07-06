@@ -7,11 +7,13 @@ namespace Cosmira\Sandbox;
 use function class_exists;
 
 use Cosmira\Sandbox\Commands\BenchmarkSyncCommand;
-use Cosmira\Sandbox\Commands\CloseSandboxCommand;
+use Cosmira\Sandbox\Commands\CommitSandboxCommand;
 use Cosmira\Sandbox\Commands\OpenSandboxCommand;
+use Cosmira\Sandbox\Commands\RollbackSandboxCommand;
+use Cosmira\Sandbox\Commands\SaveSandboxCommand;
 use Cosmira\Sandbox\Commands\StatusSandboxCommand;
-use Cosmira\Sandbox\Enums\SandboxOperation;
-use Cosmira\Sandbox\Events\SandboxClosed;
+use Cosmira\Sandbox\Events\SandboxCommitted;
+use Cosmira\Sandbox\Events\SandboxRolledBack;
 use Cosmira\Sandbox\Http\Middleware\SandboxMiddleware;
 use Cosmira\Sandbox\Support\SandboxModelRegistry;
 use DragonCode\Benchmark\Benchmark;
@@ -44,11 +46,10 @@ class SandboxServiceProvider extends ServiceProvider
             SandboxMiddleware::class,
         );
 
-        Event::listen(SandboxClosed::class, function (SandboxClosed $event): void {
-            if ($event->result !== SandboxOperation::Save) {
-                app(SandboxModelRegistry::class)->restoreActiveTables();
-            }
-        });
+        Event::listen(SandboxCommitted::class, fn (): mixed => app(SandboxModelRegistry::class)
+            ->restoreActiveTables());
+        Event::listen(SandboxRolledBack::class, fn (): mixed => app(SandboxModelRegistry::class)
+            ->restoreActiveTables());
 
         Sandbox::macro('for', function (int|string $userId) {
             return new SandboxBuilder($userId);
@@ -69,7 +70,9 @@ class SandboxServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $commands = [
                 OpenSandboxCommand::class,
-                CloseSandboxCommand::class,
+                CommitSandboxCommand::class,
+                RollbackSandboxCommand::class,
+                SaveSandboxCommand::class,
                 StatusSandboxCommand::class,
             ];
 

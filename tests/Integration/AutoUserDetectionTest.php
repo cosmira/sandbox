@@ -80,27 +80,27 @@ class AutoUserDetectionTest extends TestCase
     }
 
     #[Test]
-    public function closeCommandAutodetectsCurrentUser(): void
+    public function rollbackCommandAutodetectsCurrentUser(): void
     {
         $this->actingAs($user = $this->createUser(id: 789));
 
         Sandbox::for(789)->open();
 
-        $this->artisan('sandbox:close')
+        $this->artisan('sandbox:rollback')
             ->assertSuccessful()
-            ->expectsOutput('Sandbox closed with result: rollback');
+            ->expectsOutput('Sandbox rolled back');
 
         $this->assertSandboxFree();
     }
 
     #[Test]
-    public function closeCommandWithExplicitUserIgnoresAuth(): void
+    public function commitCommandWithExplicitUserIgnoresAuth(): void
     {
         $this->actingAs($this->createUser(id: 1));
 
         Sandbox::for(222)->open();
 
-        $this->artisan('sandbox:close', ['userId' => '222', '--result' => 'commit'])
+        $this->artisan('sandbox:commit', ['userId' => '222'])
             ->assertSuccessful();
 
         $this->assertSandboxFree();

@@ -23,7 +23,7 @@ final class SyncOperationsTest extends TestCase
         $this->createTestTables();
         SimpleModelStub::setSimpleKey();
         SimpleModelStub::setDefaultSyncColumns();
-        SimpleModelStub::useActiveTable();
+        SimpleModelStub::useActive();
     }
 
     private function createTestTables(): void
@@ -45,17 +45,17 @@ final class SyncOperationsTest extends TestCase
     }
 
     /**
-     * Test that syncIntoSandbox properly copies rows from active to sandbox.
+     * Test that resetSandbox properly copies rows from active to sandbox.
      */
     #[Test]
-    public function syncIntoSandboxCopiesRowsFromActiveToSandbox(): void
+    public function resetSandboxCopiesRowsFromActiveToSandbox(): void
     {
         DB::table('items')->insert([
             ['name' => 'item1', 'value' => 100, 'created_at' => now(), 'updated_at' => now()],
             ['name' => 'item2', 'value' => 200, 'created_at' => now(), 'updated_at' => now()],
         ]);
 
-        SimpleModelStub::syncIntoSandbox();
+        SimpleModelStub::resetSandbox();
 
         $this->assertSame(2, DB::table('items_sb')->count());
         $this->assertSame(100, DB::table('items_sb')->where('name', 'item1')->value('value'));
@@ -63,7 +63,7 @@ final class SyncOperationsTest extends TestCase
     }
 
     #[Test]
-    public function syncIntoSandboxReplacesExistingRowsWhenNoTrackColumnIsConfigured(): void
+    public function resetSandboxReplacesExistingRowsWhenNoTrackColumnIsConfigured(): void
     {
         DB::table('items')->insert([
             [
@@ -84,7 +84,7 @@ final class SyncOperationsTest extends TestCase
             ],
         ]);
 
-        SimpleModelStub::syncIntoSandbox();
+        SimpleModelStub::resetSandbox();
 
         $this->assertSame(1, DB::table('items_sb')->count());
         $this->assertSame('fresh', DB::table('items_sb')->where('id', 1)->value('name'));
@@ -92,10 +92,10 @@ final class SyncOperationsTest extends TestCase
     }
 
     /**
-     * Test that syncIntoSandbox removes orphaned rows (present in sandbox but not in active).
+     * Test that resetSandbox removes orphaned rows (present in sandbox but not in active).
      */
     #[Test]
-    public function syncIntoSandboxRemovesOrphans(): void
+    public function resetSandboxRemovesOrphans(): void
     {
         DB::table('items')->insert([
             [
@@ -116,17 +116,17 @@ final class SyncOperationsTest extends TestCase
             ],
         ]);
 
-        SimpleModelStub::syncIntoSandbox();
+        SimpleModelStub::resetSandbox();
 
         $this->assertSame(1, DB::table('items_sb')->count());
         $this->assertSame(0, DB::table('items_sb')->where('name', 'orphan')->count());
     }
 
     /**
-     * Test that syncIntoSandbox updates changed rows in sandbox.
+     * Test that resetSandbox updates changed rows in sandbox.
      */
     #[Test]
-    public function syncIntoSandboxUpdatesChangedRows(): void
+    public function resetSandboxUpdatesChangedRows(): void
     {
         SimpleModelStub::setTrackedChangeColumn();
 
@@ -151,13 +151,13 @@ final class SyncOperationsTest extends TestCase
             ],
         ]);
 
-        SimpleModelStub::syncIntoSandbox();
+        SimpleModelStub::resetSandbox();
 
         $this->assertSame(100, DB::table('items_sb')->find(1)->value);
     }
 
     #[Test]
-    public function syncIntoSandboxDoesNotUpdateRowsWhenTrackedColumnIsUnchanged(): void
+    public function resetSandboxDoesNotUpdateRowsWhenTrackedColumnIsUnchanged(): void
     {
         SimpleModelStub::setTrackedChangeColumn();
 
@@ -195,14 +195,14 @@ final class SyncOperationsTest extends TestCase
             ],
         ]);
 
-        SimpleModelStub::syncIntoSandbox();
+        SimpleModelStub::resetSandbox();
 
         $this->assertSame(100, DB::table('items_sb')->where('id', 1)->value('value'));
         $this->assertSame(999, DB::table('items_sb')->where('id', 2)->value('value'));
     }
 
     #[Test]
-    public function syncIntoSandboxUpdatesWhenTrackedColumnChangesFromNull(): void
+    public function resetSandboxUpdatesWhenTrackedColumnChangesFromNull(): void
     {
         SimpleModelStub::setTrackedChangeColumn();
 
@@ -225,13 +225,13 @@ final class SyncOperationsTest extends TestCase
             ],
         ]);
 
-        SimpleModelStub::syncIntoSandbox();
+        SimpleModelStub::resetSandbox();
 
         $this->assertSame(100, DB::table('items_sb')->where('id', 1)->value('value'));
     }
 
     #[Test]
-    public function syncIntoSandboxUpdatesWhenTrackedColumnChangesToNull(): void
+    public function resetSandboxUpdatesWhenTrackedColumnChangesToNull(): void
     {
         SimpleModelStub::setTrackedChangeColumn();
 
@@ -254,7 +254,7 @@ final class SyncOperationsTest extends TestCase
             ],
         ]);
 
-        SimpleModelStub::syncIntoSandbox();
+        SimpleModelStub::resetSandbox();
 
         $row = DB::table('items_sb')->where('id', 1)->first();
         $this->assertSame(100, $row->value);
@@ -262,7 +262,7 @@ final class SyncOperationsTest extends TestCase
     }
 
     #[Test]
-    public function syncIntoSandboxThrowsWhenTrackedColumnIsMissing(): void
+    public function resetSandboxThrowsWhenTrackedColumnIsMissing(): void
     {
         SimpleModelStub::setMissingTrackedChangeColumn();
 
@@ -279,21 +279,72 @@ final class SyncOperationsTest extends TestCase
         $this->expectException(SandboxException::class);
         $this->expectExceptionCode(SandboxException::CODE_SYNC_COLUMN_MISSING);
 
-        SimpleModelStub::syncIntoSandbox();
+        SimpleModelStub::resetSandbox();
+    }
+
+    #[Test]
+    public function modelsMayDisableTrackedColumnWithAProtectedOverride(): void
+    {
+        $now = now();
+
+        DB::table('items')->insert([
+            [
+                'id'         => 1,
+                'name'       => 'fresh',
+                'value'      => 100,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        ]);
+        DB::table('items_sb')->insert([
+            [
+                'id'         => 1,
+                'name'       => 'stale',
+                'value'      => 50,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        ]);
+
+        NoTrackedColumnModelStub::resetSandbox();
+
+        $this->assertSame('fresh', DB::table('items_sb')->where('id', 1)->value('name'));
+        $this->assertSame(100, DB::table('items_sb')->where('id', 1)->value('value'));
+    }
+
+    #[Test]
+    public function modelsMayOverrideSyncColumnsWithAProtectedMethod(): void
+    {
+        DB::table('items')->insert([
+            [
+                'id'         => 1,
+                'name'       => 'name-only',
+                'value'      => 100,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        NameOnlyColumnsModelStub::resetSandbox();
+
+        $row = DB::table('items_sb')->where('id', 1)->first();
+
+        $this->assertSame('name-only', $row->name);
+        $this->assertSame(0, $row->value);
     }
 
     /**
-     * Test that syncIntoActive properly copies rows from sandbox to active.
+     * Test that applySandbox properly copies rows from sandbox to active.
      */
     #[Test]
-    public function syncIntoActiveCopiesRowsFromSandboxToActive(): void
+    public function applySandboxCopiesRowsFromSandboxToActive(): void
     {
         DB::table('items_sb')->insert([
             ['name' => 'sbitem1', 'value' => 111, 'created_at' => now(), 'updated_at' => now()],
             ['name' => 'sbitem2', 'value' => 222, 'created_at' => now(), 'updated_at' => now()],
         ]);
 
-        SimpleModelStub::syncIntoActive();
+        SimpleModelStub::applySandbox();
 
         $this->assertSame(2, DB::table('items')->count());
         $this->assertSame(111, DB::table('items')->where('name', 'sbitem1')->value('value'));
@@ -301,10 +352,10 @@ final class SyncOperationsTest extends TestCase
     }
 
     /**
-     * Test that syncIntoActive removes orphaned rows in active table.
+     * Test that applySandbox removes orphaned rows in active table.
      */
     #[Test]
-    public function syncIntoActiveRemovesOrphansFromActive(): void
+    public function applySandboxRemovesOrphansFromActive(): void
     {
         DB::table('items_sb')->insert([
             [
@@ -325,7 +376,7 @@ final class SyncOperationsTest extends TestCase
             ],
         ]);
 
-        SimpleModelStub::syncIntoActive();
+        SimpleModelStub::applySandbox();
 
         $this->assertSame(1, DB::table('items')->count());
         $this->assertSame(0, DB::table('items')->where('name', 'orphan_active')->count());
@@ -348,24 +399,24 @@ final class SyncOperationsTest extends TestCase
     {
         $model = new SimpleModelStub();
 
-        $this->assertFalse(SimpleModelStub::isUsingSandboxTable());
+        $this->assertFalse(SimpleModelStub::isUsingSandbox());
         $this->assertSame('items', $model->getTableForQuery());
 
-        SimpleModelStub::useSandboxTable();
+        SimpleModelStub::useSandbox();
 
-        $this->assertTrue(SimpleModelStub::isUsingSandboxTable());
+        $this->assertTrue(SimpleModelStub::isUsingSandbox());
         $this->assertSame('items_sb', $model->getTableForQuery());
 
-        SimpleModelStub::useActiveTable();
+        SimpleModelStub::useActive();
 
-        $this->assertFalse(SimpleModelStub::isUsingSandboxTable());
+        $this->assertFalse(SimpleModelStub::isUsingSandbox());
         $this->assertSame('items', $model->getTableForQuery());
     }
 
     #[Test]
     public function withoutSandboxWritesToActiveTableWhileSandboxIsEnabled(): void
     {
-        SimpleModelStub::useSandboxTable();
+        SimpleModelStub::useSandbox();
 
         SimpleModelStub::withoutSandbox(function (): void {
             $model = new SimpleModelStub();
@@ -375,7 +426,7 @@ final class SyncOperationsTest extends TestCase
             ])->save();
         });
 
-        $this->assertTrue(SimpleModelStub::isUsingSandboxTable());
+        $this->assertTrue(SimpleModelStub::isUsingSandbox());
         $this->assertSame(777, DB::table('items')->where('name', 'active-only')->value('value'));
         $this->assertFalse(DB::table('items_sb')->where('name', 'active-only')->exists());
     }
@@ -383,14 +434,14 @@ final class SyncOperationsTest extends TestCase
     #[Test]
     public function withoutSandboxRestoresSandboxStateWhenCallbackFails(): void
     {
-        SimpleModelStub::useSandboxTable();
+        SimpleModelStub::useSandbox();
 
         try {
             SimpleModelStub::withoutSandbox(function (): never {
                 throw new \RuntimeException('Active write failed.');
             });
         } catch (\RuntimeException) {
-            $this->assertTrue(SimpleModelStub::isUsingSandboxTable());
+            $this->assertTrue(SimpleModelStub::isUsingSandbox());
 
             return;
         }
@@ -401,13 +452,13 @@ final class SyncOperationsTest extends TestCase
     #[Test]
     public function withSandboxRestoresActiveStateAfterCallback(): void
     {
-        SimpleModelStub::useActiveTable();
+        SimpleModelStub::useActive();
 
         SimpleModelStub::withSandbox(function (): void {
-            $this->assertTrue(SimpleModelStub::isUsingSandboxTable());
+            $this->assertTrue(SimpleModelStub::isUsingSandbox());
         });
 
-        $this->assertFalse(SimpleModelStub::isUsingSandboxTable());
+        $this->assertFalse(SimpleModelStub::isUsingSandbox());
     }
 
     #[Test]
@@ -436,13 +487,13 @@ final class SyncOperationsTest extends TestCase
             'getSandboxTablePostfix',
             'getSandboxPrimaryKey',
             'getSandboxTable',
-            'useSandboxTable',
-            'useActiveTable',
-            'isUsingSandboxTable',
+            'useSandbox',
+            'useActive',
+            'isUsingSandbox',
             'withoutSandbox',
             'withSandbox',
-            'syncIntoSandbox',
-            'syncIntoActive',
+            'resetSandbox',
+            'applySandbox',
             'getSandboxWritableColumns',
             'supportsSandboxSync',
         ];
@@ -516,6 +567,18 @@ final class SyncOperationsTest extends TestCase
     }
 
     #[Test]
+    public function resetSandboxDataRejectsModelsWithoutActiveTableApi(): void
+    {
+        $model = new PartialSandboxRestoreModelWithoutActiveTableStub();
+        $model->setAttribute('id', 1);
+
+        $this->expectException(SandboxException::class);
+        $this->expectExceptionCode(SandboxException::CODE_MODEL_NOT_REGISTERED);
+
+        app(Sandbox::class)->resetSandboxData($model);
+    }
+
+    #[Test]
     public function resetSandboxDataInsertsSingleModelRow(): void
     {
         DB::table('items')->insert([
@@ -534,6 +597,30 @@ final class SyncOperationsTest extends TestCase
         app(Sandbox::class)->resetSandboxData($model);
 
         $this->assertSame(100, DB::table('items_sb')->where('id', 1)->value('value'));
+    }
+
+    #[Test]
+    public function resetSandboxDataKeepsKeyColumnsWhenWritableColumnsExcludeThem(): void
+    {
+        SimpleModelStub::setSyncColumnsWithoutKey();
+
+        DB::table('items')->insert([
+            [
+                'id'         => 7,
+                'name'       => 'keyed',
+                'value'      => 700,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $model = new SimpleModelStub();
+        $model->id = 7;
+
+        app(Sandbox::class)->resetSandboxData($model);
+
+        $this->assertSame(1, DB::table('items_sb')->count());
+        $this->assertSame('keyed', DB::table('items_sb')->where('id', 7)->value('name'));
     }
 
     #[Test]
@@ -589,22 +676,22 @@ final class SyncOperationsTest extends TestCase
     }
 
     /**
-     * Test that empty sandbox can sync into active.
+     * Test that an empty sandbox can be applied to active data.
      */
     #[Test]
-    public function syncIntoActiveWithEmptySandboxClearsActive(): void
+    public function applySandboxWithEmptySandboxClearsActive(): void
     {
         DB::table('items')->insert([
             ['name' => 'item1', 'value' => 100, 'created_at' => now(), 'updated_at' => now()],
         ]);
 
-        SimpleModelStub::syncIntoActive();
+        SimpleModelStub::applySandbox();
 
         $this->assertSame(0, DB::table('items')->count());
     }
 
     #[Test]
-    public function syncIntoSandboxHonorsExplicitSyncColumns(): void
+    public function resetSandboxHonorsExplicitSyncColumns(): void
     {
         SimpleModelStub::setNameOnlySyncColumns();
 
@@ -618,7 +705,7 @@ final class SyncOperationsTest extends TestCase
             ],
         ]);
 
-        SimpleModelStub::syncIntoSandbox();
+        SimpleModelStub::resetSandbox();
 
         $row = DB::table('items_sb')->where('id', 5)->first();
 
@@ -627,16 +714,16 @@ final class SyncOperationsTest extends TestCase
     }
 
     /**
-     * Test that empty active can sync into sandbox.
+     * Test that empty active data can reset the sandbox.
      */
     #[Test]
-    public function syncIntoSandboxWithEmptyActiveClearsSandbox(): void
+    public function resetSandboxWithEmptyActiveClearsSandbox(): void
     {
         DB::table('items_sb')->insert([
             ['name' => 'item1', 'value' => 100, 'created_at' => now(), 'updated_at' => now()],
         ]);
 
-        SimpleModelStub::syncIntoSandbox();
+        SimpleModelStub::resetSandbox();
 
         $this->assertSame(0, DB::table('items_sb')->count());
     }
@@ -755,6 +842,13 @@ class SimpleModelStub extends Model
         self::$sandboxSyncColumns = ['id', 'name'];
     }
 
+    public static function setSyncColumnsWithoutKey(): void
+    {
+        self::$sandboxPrimaryKey = 'id';
+        self::$sandboxTrackChangeColumn = null;
+        self::$sandboxSyncColumns = ['name', 'value', 'created_at', 'updated_at'];
+    }
+
     public static function setTrackedChangeColumn(): void
     {
         self::$sandboxPrimaryKey = 'id';
@@ -768,6 +862,24 @@ class SimpleModelStub extends Model
     }
 }
 
+class NoTrackedColumnModelStub extends SimpleModelStub
+{
+    protected static ?string $sandboxTrackChangeColumn = 'updated_at';
+
+    protected static function getSandboxTrackChangeColumn(): ?string
+    {
+        return null;
+    }
+}
+
+class NameOnlyColumnsModelStub extends SimpleModelStub
+{
+    protected function getSandboxSyncColumns(): array
+    {
+        return ['id', 'name'];
+    }
+}
+
 class NonSandboxSyncModelStub extends Model
 {
     protected $table = 'items';
@@ -777,14 +889,14 @@ class PartialSandboxSyncModelStub extends Model
 {
     protected $table = 'items';
 
-    public static function syncIntoSandbox(): void {}
+    public static function resetSandbox(): void {}
 }
 
 class PartialSandboxTableModelStub extends Model
 {
     protected $table = 'items';
 
-    public static function syncIntoSandbox(): void {}
+    public static function resetSandbox(): void {}
 
     public function getActiveTable(): string
     {
@@ -799,5 +911,27 @@ class PartialSandboxTableModelStub extends Model
     public function getSandboxPrimaryKey(): string
     {
         return 'id';
+    }
+}
+
+class PartialSandboxRestoreModelWithoutActiveTableStub extends Model
+{
+    protected $table = 'items';
+
+    public static function resetSandbox(): void {}
+
+    public function getSandboxTable(): string
+    {
+        return 'items_sb';
+    }
+
+    public function getSandboxPrimaryKey(): string
+    {
+        return 'id';
+    }
+
+    public function getSandboxWritableColumns(): array
+    {
+        return ['id', 'name', 'value', 'created_at', 'updated_at'];
     }
 }

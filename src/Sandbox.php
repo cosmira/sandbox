@@ -6,10 +6,13 @@ namespace Cosmira\Sandbox;
 
 use Cosmira\Sandbox\Enums\SandboxOperation;
 use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
-use Cosmira\Sandbox\Events\SandboxApplying;
-use Cosmira\Sandbox\Events\SandboxClosed;
+use Cosmira\Sandbox\Events\SandboxCommitted;
+use Cosmira\Sandbox\Events\SandboxCommitting;
 use Cosmira\Sandbox\Events\SandboxOpened;
 use Cosmira\Sandbox\Events\SandboxResetting;
+use Cosmira\Sandbox\Events\SandboxRolledBack;
+use Cosmira\Sandbox\Events\SandboxRollingBack;
+use Cosmira\Sandbox\Events\SandboxSaved;
 use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\Models\SandboxStatus;
 use Cosmira\Sandbox\Support\SandboxModelRegistry;
@@ -72,26 +75,22 @@ class Sandbox
     {
         Log::debug('Opening sandbox', ['user_id' => $user]);
 
-        $userId = $user instanceof Model ? $user->getKey() : $user;
+        $userId = $this->userId($user);
 
         DB::transaction(function () use ($userId, $force, $note): void {
             $status = $this->lockedStatus();
 
-            if (! $force && $status->isLocked() && ! $status->isOwnedBy($userId)) {
+            if (! $force && ! $status->isFree() && ! $status->isForUser($userId)) {
                 throw new SandboxException(
                     'Sandbox is locked by other user '.$status->user_id,
                     SandboxException::CODE_SANDBOX_LOCKED,
                 );
             }
 
-            if (
-                $status->isFree()
-                || (
-                    $force
-                    && $status->isLocked()
-                    && ! $status->isOwnedBy($userId)
-                )
-            ) {
+            if ($status->isFree()) {
+                Event::dispatch(new SandboxResetting());
+                $this->models->resetSandbox();
+            } elseif ($force && ! $status->isForUser($userId)) {
                 Event::dispatch(new SandboxResetting());
             }
 
@@ -109,11 +108,49 @@ class Sandbox
     }
 
     /**
+     * Commit the sandbox draft to active data and release the lock.
+     *
+     * @throws SandboxException
+     */
+    public function commit(
+        int|string|Model $user,
+        ?string $note = null,
+        bool $asyncUpdater = true,
+    ): void {
+        $this->close(
+            $this->userId($user),
+            SandboxOperation::Commit,
+            $note,
+            $asyncUpdater,
+        );
+    }
+
+    /**
+     * Roll the sandbox draft back from active data and release the lock.
+     *
+     * @throws SandboxException
+     */
+    public function rollback(int|string|Model $user, ?string $note = null): void
+    {
+        $this->close($this->userId($user), SandboxOperation::Rollback, $note);
+    }
+
+    /**
+     * Save the sandbox draft without applying it to active data.
+     *
+     * @throws SandboxException
+     */
+    public function save(int|string|Model $user, ?string $note = null): void
+    {
+        $this->close($this->userId($user), SandboxOperation::Save, $note);
+    }
+
+    /**
      * Close the sandbox with the given operation.
      *
      * @throws SandboxException
      */
-    public function close(
+    private function close(
         int|string $userId,
         SandboxOperation $result,
         ?string $note = null,
@@ -136,7 +173,7 @@ class Sandbox
 
             if (
                 $status->isLocked()
-                && ! $status->isOwnedBy($userId)
+                && ! $status->isLockedBy($userId)
                 && $result !== SandboxOperation::Rollback
             ) {
                 throw new SandboxException(
@@ -167,8 +204,9 @@ class Sandbox
     {
         $closedAt = now();
 
+        Event::dispatch(new SandboxRollingBack());
         Event::dispatch(new SandboxResetting());
-        $this->models->syncIntoSandbox();
+        $this->models->resetSandbox();
 
         $this->updateStatusRow($status, [
             'status'         => SandboxStatusEnum::Free,
@@ -179,12 +217,10 @@ class Sandbox
             'change_id'      => $status->change_id + 1,
         ]);
 
-        Event::dispatch(new SandboxClosed(
+        Event::dispatch(new SandboxRolledBack(
             $userId,
-            SandboxOperation::Rollback,
             $closedAt,
             $note,
-            false,
         ));
     }
 
@@ -199,8 +235,8 @@ class Sandbox
     ): void {
         $closedAt = now();
 
-        Event::dispatch(new SandboxApplying());
-        $this->models->syncIntoActive();
+        Event::dispatch(new SandboxCommitting());
+        $this->models->applySandbox();
 
         $this->updateStatusRow($status, [
             'status'         => SandboxStatusEnum::Free,
@@ -212,9 +248,8 @@ class Sandbox
             'change_id'      => $status->change_id + 1,
         ]);
 
-        Event::dispatch(new SandboxClosed(
+        Event::dispatch(new SandboxCommitted(
             $userId,
-            SandboxOperation::Commit,
             $closedAt,
             $note,
             $asyncUpdater,
@@ -237,12 +272,10 @@ class Sandbox
             'change_id'      => $status->change_id + 1,
         ]);
 
-        Event::dispatch(new SandboxClosed(
+        Event::dispatch(new SandboxSaved(
             $userId,
-            SandboxOperation::Save,
             $closedAt,
             $note,
-            false,
         ));
     }
 
@@ -312,9 +345,9 @@ class Sandbox
         );
 
         throw_unless(
-            method_exists($modelClass, 'syncIntoSandbox'),
+            method_exists($modelClass, 'resetSandbox'),
             SandboxException::class,
-            sprintf('Model %s has no syncIntoSandbox(). Use HasSandbox trait.', $modelClass),
+            sprintf('Model %s has no resetSandbox(). Use HasSandbox trait.', $modelClass),
             SandboxException::CODE_MODEL_NOT_REGISTERED
         );
     }
@@ -336,6 +369,27 @@ class Sandbox
      */
     private function resetBulk(string $modelClass): void
     {
-        $modelClass::syncIntoSandbox();
+        $modelClass::resetSandbox();
+    }
+
+    /**
+     * Get the scalar identifier for a user value.
+     */
+    private function userId(int|string|Model $user): int|string
+    {
+        if (! $user instanceof Model) {
+            return $user;
+        }
+
+        $key = $user->getKey();
+
+        throw_if(
+            $key === null,
+            SandboxException::class,
+            sprintf('Model %s has no key.', $user::class),
+            SandboxException::CODE_MODEL_NOT_REGISTERED,
+        );
+
+        return $key;
     }
 }

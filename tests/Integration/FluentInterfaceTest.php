@@ -6,8 +6,8 @@ namespace Cosmira\Sandbox\Tests\Integration;
 
 use Cosmira\Sandbox\Enums\SandboxOperation;
 use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
-use Cosmira\Sandbox\Events\SandboxApplying;
-use Cosmira\Sandbox\Events\SandboxClosed;
+use Cosmira\Sandbox\Events\SandboxCommitted;
+use Cosmira\Sandbox\Events\SandboxCommitting;
 use Cosmira\Sandbox\Events\SandboxResetting;
 use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\Facades\Sandbox;
@@ -68,8 +68,8 @@ final class FluentInterfaceTest extends TestCase
     {
         Event::fake([
             SandboxResetting::class,
-            SandboxApplying::class,
-            SandboxClosed::class,
+            SandboxCommitting::class,
+            SandboxCommitted::class,
         ]);
 
         Sandbox::for(1)->open();
@@ -78,10 +78,10 @@ final class FluentInterfaceTest extends TestCase
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Free, $status->status);
 
-        Event::assertDispatched(SandboxApplying::class);
+        Event::assertDispatched(SandboxCommitting::class);
         Event::assertDispatched(
-            SandboxClosed::class,
-            fn (SandboxClosed $event): bool => $event->asyncUpdater === true,
+            SandboxCommitted::class,
+            fn (SandboxCommitted $event): bool => $event->asyncUpdater === true,
         );
     }
 
@@ -158,8 +158,8 @@ final class FluentInterfaceTest extends TestCase
     {
         Event::fake([
             SandboxResetting::class,
-            SandboxApplying::class,
-            SandboxClosed::class,
+            SandboxCommitting::class,
+            SandboxCommitted::class,
         ]);
 
         // Test fluent chaining
@@ -171,11 +171,11 @@ final class FluentInterfaceTest extends TestCase
     }
 
     #[Test]
-    public function backwardCompatibilityWithOldAPI(): void
+    public function directApiMatchesTheFluentApi(): void
     {
         Event::fake([SandboxResetting::class]);
 
-        // Old API
+        // Direct API
         app(\Cosmira\Sandbox\Sandbox::class)->open(1);
 
         $status1 = SandboxStatus::first();
@@ -185,10 +185,10 @@ final class FluentInterfaceTest extends TestCase
         // Store the status for comparison
         $oldStatus = $status1->status;
 
-        // Close for next test
-        app(\Cosmira\Sandbox\Sandbox::class)->close(1, SandboxOperation::Rollback);
+        // Release for the next check.
+        app(\Cosmira\Sandbox\Sandbox::class)->rollback(1);
 
-        // New fluent API
+        // Fluent API
         Sandbox::for(2)->open();
 
         $status2 = SandboxStatus::first();
@@ -230,7 +230,7 @@ class BuilderResetModelStub extends Model
 {
     public static int $synced = 0;
 
-    public static function syncIntoSandbox(): void
+    public static function resetSandbox(): void
     {
         self::$synced++;
     }

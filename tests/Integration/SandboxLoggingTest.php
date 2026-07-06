@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Cosmira\Sandbox\Tests\Integration;
 
-use Cosmira\Sandbox\Enums\SandboxOperation;
 use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
 use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\Models\SandboxStatus;
@@ -94,7 +93,7 @@ final class SandboxLoggingTest extends TestCase
                 'result'  => 'save',
             ]);
 
-        $this->sandbox->close(1, SandboxOperation::Save);
+        $this->sandbox->save(1);
 
         $status = SandboxStatus::first();
         $this->assertSame(SandboxStatusEnum::Saved, $status->status);
@@ -112,7 +111,7 @@ final class SandboxLoggingTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $this->sandbox->close(1, SandboxOperation::Rollback);
+        $this->sandbox->rollback(1);
 
         $status = SandboxStatus::first();
         $this->assertSame(SandboxStatusEnum::Free, $status->status);

@@ -47,9 +47,9 @@ trait HasSandbox
     }
 
     /**
-     * Indicates if queries should target the sandbox table.
+     * Indicates if queries should target sandbox data.
      */
-    protected static bool $useSandboxTable = false;
+    protected static bool $usesSandbox = false;
 
     /**
      * Get the active table name for the model.
@@ -72,7 +72,7 @@ trait HasSandbox
      */
     public function getTableForQuery(): string
     {
-        return static::$useSandboxTable ? $this->getSandboxTable() : $this->getActiveTable();
+        return static::$usesSandbox ? $this->getSandboxTable() : $this->getActiveTable();
     }
 
     /**
@@ -114,27 +114,27 @@ trait HasSandbox
     }
 
     /**
-     * Switch model queries to the sandbox table.
+     * Switch model queries to sandbox data.
      */
-    public static function useSandboxTable(): void
+    public static function useSandbox(): void
     {
-        static::$useSandboxTable = true;
+        static::$usesSandbox = true;
     }
 
     /**
-     * Switch model queries to the active table.
+     * Switch model queries to active data.
      */
-    public static function useActiveTable(): void
+    public static function useActive(): void
     {
-        static::$useSandboxTable = false;
+        static::$usesSandbox = false;
     }
 
     /**
-     * Determine if model queries currently target the sandbox table.
+     * Determine if model queries currently target sandbox data.
      */
-    public static function isUsingSandboxTable(): bool
+    public static function isUsingSandbox(): bool
     {
-        return static::$useSandboxTable;
+        return static::$usesSandbox;
     }
 
     /**
@@ -152,7 +152,7 @@ trait HasSandbox
     }
 
     /**
-     * Run the callback while model queries target the sandbox table.
+     * Run the callback while model queries target sandbox data.
      *
      * @template TReturn
      *
@@ -182,9 +182,9 @@ trait HasSandbox
     }
 
     /**
-     * Sync the active table into the sandbox table.
+     * Reset sandbox data from the active table.
      */
-    public static function syncIntoSandbox(): void
+    public static function resetSandbox(): void
     {
         $instance = new static();
 
@@ -197,9 +197,9 @@ trait HasSandbox
     }
 
     /**
-     * Sync the sandbox table into the active table.
+     * Apply sandbox data to the active table.
      */
-    public static function syncIntoActive(): void
+    public static function applySandbox(): void
     {
         $instance = new static();
 
@@ -212,7 +212,7 @@ trait HasSandbox
     }
 
     /**
-     * Sync rows from one configured model table to another.
+     * Synchronize rows from one configured model table to another.
      */
     private static function syncTables(
         string $sourceTable,
@@ -260,13 +260,13 @@ trait HasSandbox
      */
     private static function usingTableState(bool $useSandbox, callable $callback): mixed
     {
-        $previousState = static::$useSandboxTable;
-        static::$useSandboxTable = $useSandbox;
+        $previousState = static::$usesSandbox;
+        static::$usesSandbox = $useSandbox;
 
         try {
             return $callback();
         } finally {
-            static::$useSandboxTable = $previousState;
+            static::$usesSandbox = $previousState;
         }
     }
 

@@ -127,8 +127,8 @@ trait SandboxTestHelpers
     protected function useSandbox(string|Model $modelOrClass): void
     {
         $modelClass = $modelOrClass instanceof Model ? $modelOrClass::class : $modelOrClass;
-        if (method_exists($modelClass, 'useSandboxTable')) {
-            $modelClass::useSandboxTable();
+        if (method_exists($modelClass, 'useSandbox')) {
+            $modelClass::useSandbox();
         }
     }
 
@@ -140,8 +140,8 @@ trait SandboxTestHelpers
     protected function useActive(string|Model $modelOrClass): void
     {
         $modelClass = $modelOrClass instanceof Model ? $modelOrClass::class : $modelOrClass;
-        if (method_exists($modelClass, 'useActiveTable')) {
-            $modelClass::useActiveTable();
+        if (method_exists($modelClass, 'useActive')) {
+            $modelClass::useActive();
         }
     }
 

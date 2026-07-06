@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Cosmira\Sandbox;
 
-use Cosmira\Sandbox\Enums\SandboxOperation;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -23,8 +22,8 @@ class SandboxBuilder
     public function __construct(/**
      * The user ID bound to the builder.
      */
-        private readonly int|string $userId)
-    {
+        private readonly int|string $userId,
+    ) {
         $this->sandbox = app(Sandbox::class);
     }
 
@@ -43,7 +42,7 @@ class SandboxBuilder
      */
     public function rollback(?string $note = null): void
     {
-        $this->sandbox->close($this->userId, SandboxOperation::Rollback, $note);
+        $this->sandbox->rollback($this->userId, $note);
     }
 
     /**
@@ -51,7 +50,7 @@ class SandboxBuilder
      */
     public function commit(?string $note = null, bool $asyncUpdater = true): void
     {
-        $this->sandbox->close($this->userId, SandboxOperation::Commit, $note, $asyncUpdater);
+        $this->sandbox->commit($this->userId, $note, $asyncUpdater);
     }
 
     /**
@@ -59,7 +58,7 @@ class SandboxBuilder
      */
     public function save(?string $note = null): void
     {
-        $this->sandbox->close($this->userId, SandboxOperation::Save, $note);
+        $this->sandbox->save($this->userId, $note);
     }
 
     /**

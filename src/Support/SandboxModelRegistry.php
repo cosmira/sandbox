@@ -8,7 +8,7 @@ use Cosmira\Sandbox\Exceptions\SandboxException;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Stores sandbox models and applies their table lifecycle operations.
+ * Stores sandbox models and applies their draft lifecycle operations.
  */
 class SandboxModelRegistry
 {
@@ -20,7 +20,7 @@ class SandboxModelRegistry
     private array $models = [];
 
     /**
-     * The models switched to sandbox tables for the current execution context.
+     * The models switched to sandbox data for the current execution context.
      *
      * @var array<int, class-string<Model>>
      */
@@ -52,11 +52,11 @@ class SandboxModelRegistry
     }
 
     /**
-     * Switch registered or given models to sandbox tables.
+     * Switch registered or given models to sandbox data.
      *
      * @param class-string<Model> ...$models
      */
-    public function useSandboxTables(string ...$models): void
+    public function useSandbox(string ...$models): void
     {
         $models = $models === [] ? $this->all() : $models;
 
@@ -64,7 +64,7 @@ class SandboxModelRegistry
             $this->ensureCanUseSandboxTables($model);
 
             $this->remember($this->switched, $model);
-            $model::useSandboxTable();
+            $model::useSandbox();
         }
     }
 
@@ -75,7 +75,7 @@ class SandboxModelRegistry
     {
         foreach ($this->switched as $model) {
             if ($this->canUseSandboxTables($model)) {
-                $model::useActiveTable();
+                $model::useActive();
             }
         }
 
@@ -83,22 +83,22 @@ class SandboxModelRegistry
     }
 
     /**
-     * Sync registered active tables into their sandbox tables.
+     * Reset registered sandbox tables from active tables.
      */
-    public function syncIntoSandbox(): void
+    public function resetSandbox(): void
     {
         foreach ($this->all() as $model) {
-            $model::syncIntoSandbox();
+            $model::resetSandbox();
         }
     }
 
     /**
-     * Sync registered sandbox tables into their active tables.
+     * Apply registered sandbox tables to active tables.
      */
-    public function syncIntoActive(): void
+    public function applySandbox(): void
     {
         foreach ($this->all() as $model) {
-            $model::syncIntoActive();
+            $model::applySandbox();
         }
     }
 
@@ -129,16 +129,16 @@ class SandboxModelRegistry
     private function ensureCanSync(string $model): void
     {
         throw_unless(
-            is_subclass_of($model, Model::class) && method_exists($model, 'syncIntoSandbox'),
+            is_subclass_of($model, Model::class) && method_exists($model, 'resetSandbox'),
             SandboxException::class,
-            sprintf('Model %s has no syncIntoSandbox(). Use HasSandbox trait.', $model),
+            sprintf('Model %s has no resetSandbox(). Use HasSandbox trait.', $model),
             SandboxException::CODE_MODEL_NOT_REGISTERED,
         );
 
         throw_unless(
-            method_exists($model, 'syncIntoActive'),
+            method_exists($model, 'applySandbox'),
             SandboxException::class,
-            sprintf('Model %s has no syncIntoActive(). Use HasSandbox trait.', $model),
+            sprintf('Model %s has no applySandbox(). Use HasSandbox trait.', $model),
             SandboxException::CODE_MODEL_NOT_REGISTERED,
         );
     }
@@ -151,9 +151,9 @@ class SandboxModelRegistry
     private function canUseSandboxTables(string $model): bool
     {
         return class_exists($model)
-            && method_exists($model, 'isUsingSandboxTable')
-            && method_exists($model, 'useSandboxTable')
-            && method_exists($model, 'useActiveTable');
+            && method_exists($model, 'isUsingSandbox')
+            && method_exists($model, 'useSandbox')
+            && method_exists($model, 'useActive');
     }
 
     /**
