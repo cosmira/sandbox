@@ -49,13 +49,21 @@ final class ConcurrencyContractTest extends TestCase
 
     protected function tearDown(): void
     {
+        $database = DB::getFacadeRoot();
+
         try {
             Schema::dropIfExists('concurrent_items_sb');
             Schema::dropIfExists('concurrent_items');
         } finally {
-            parent::tearDown();
-            if ($this->databaseFile !== null && is_file($this->databaseFile)) {
-                unlink($this->databaseFile);
+            try {
+                parent::tearDown();
+            } finally {
+                foreach ($database->getConnections() as $connection) {
+                    $connection->disconnect();
+                }
+                if ($this->databaseFile !== null && is_file($this->databaseFile)) {
+                    unlink($this->databaseFile);
+                }
             }
         }
     }
@@ -154,9 +162,17 @@ final class ConcurrencyContractTest extends TestCase
                 return str_contains($output, $signal."\n");
             });
         } catch (ProcessTimedOutException $exception) {
-            $this->fail($context.' barrier '.$signal.': '.$output.$process->getErrorOutput());
+            $this->fail($context.' barrier '.$signal.': '.$exception->getMessage()."\n".$this->processDiagnostics($process));
         }
-        $this->assertTrue($ready, $context.' barrier '.$signal.': '.$process->getErrorOutput());
+        $this->assertTrue($ready, $context.' barrier '.$signal.': '.$this->processDiagnostics($process));
+    }
+
+    private function processDiagnostics(Process $process): string
+    {
+        return 'exit_code='.var_export($process->getExitCode(), true)
+            .'; command='.$process->getCommandLine()
+            ."\nstdout:\n".$process->getOutput()
+            ."\nstderr:\n".$process->getErrorOutput();
     }
 
     private function workerResult(Process $process): array

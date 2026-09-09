@@ -16,6 +16,9 @@ jobs:
   phpunit:
     runs-on: ${{ matrix.os }}
 
+    env:
+      SANDBOX_CONCURRENCY_REPETITIONS: ${{ matrix.os == 'windows-latest' && matrix.php == 8.3 && matrix.laravel == '12.*' && matrix.dependency-version == 'prefer-stable' && '100' || '1' }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -58,4 +61,12 @@ jobs:
           composer update --${{ matrix.dependency-version }} --prefer-dist --no-interaction
 
       - name: Execute tests (Unit and Feature tests) via PHPUnit 🧪
-        run: vendor/bin/phpunit  --no-coverage --disable-coverage-ignore --order-by=random
+        run: vendor/bin/phpunit --no-coverage --disable-coverage-ignore --order-by=random --random-order-seed=1788957854 --display-warnings --fail-on-warning --log-junit build/phpunit.xml
+
+      - name: Preserve test evidence
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: tests-${{ matrix.php }}-${{ matrix.os }}-laravel${{ startsWith(matrix.laravel, '12') && '12' || '13' }}-${{ matrix.dependency-version }}
+          path: build/phpunit.xml
+          if-no-files-found: error

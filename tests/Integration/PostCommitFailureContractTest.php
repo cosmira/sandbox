@@ -48,15 +48,23 @@ final class PostCommitFailureContractTest extends TestCase
 
     protected function tearDown(): void
     {
+        $database = DB::getFacadeRoot();
+
         try {
             DeliveryItem::useActive();
             DB::purge('observer');
             Schema::dropIfExists('delivery_items_sb');
             Schema::dropIfExists('delivery_items');
         } finally {
-            parent::tearDown();
-            if ($this->databaseFile !== null) {
-                unlink($this->databaseFile);
+            try {
+                parent::tearDown();
+            } finally {
+                foreach ($database->getConnections() as $connection) {
+                    $connection->disconnect();
+                }
+                if ($this->databaseFile !== null && is_file($this->databaseFile)) {
+                    unlink($this->databaseFile);
+                }
             }
         }
     }
