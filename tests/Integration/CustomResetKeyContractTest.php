@@ -22,6 +22,7 @@ final class CustomResetKeyContractTest extends TestCase
     {
         parent::setUp();
         foreach (['reset_key_items', 'reset_key_items_sb'] as $name) {
+            Schema::dropIfExists($name);
             Schema::create($name, function (Blueprint $table): void {
                 $table->integer('id')->primary();
                 $table->string('code')->unique();
@@ -37,6 +38,16 @@ final class CustomResetKeyContractTest extends TestCase
             ['id' => 1, 'code' => 'alpha', 'name' => 'Draft'],
             ['id' => 2, 'code' => '1', 'name' => 'Unrelated draft'],
         ]);
+    }
+
+    protected function tearDown(): void
+    {
+        try {
+            Schema::dropIfExists('reset_key_items_sb');
+            Schema::dropIfExists('reset_key_items');
+        } finally {
+            parent::tearDown();
+        }
     }
 
     public static function identifiers(): array
@@ -89,6 +100,21 @@ final class CustomResetKeyContractTest extends TestCase
         $this->assertFalse(DB::table('reset_key_items_sb')->where('code', 'alpha')->exists());
         $this->assertSame('Unrelated draft', DB::table('reset_key_items_sb')->where('code', '1')->value('name'));
     }
+
+    #[Test]
+    public function insertsCompositeKeysEvenWhenWritableColumnsExcludeThem(): void
+    {
+        DB::table('reset_key_items_sb')->where('code', 'alpha')->delete();
+        $model = (new CompositeResetKeyModel())->forceFill(['id' => 1, 'code' => 'alpha']);
+
+        app(Sandbox::class)->reset(1, $model);
+
+        $this->assertSame(
+            ['id' => 1, 'code' => 'alpha', 'name' => 'Active'],
+            (array) DB::table('reset_key_items_sb')->where(['id' => 1, 'code' => 'alpha'])->first(),
+        );
+        $this->assertSame('Unrelated draft', DB::table('reset_key_items_sb')->where('code', '1')->value('name'));
+    }
 }
 
 class CustomResetKeyModel extends Model
@@ -102,5 +128,18 @@ class CustomResetKeyModel extends Model
     public function getSandboxPrimaryKey(): string|array
     {
         return 'code';
+    }
+}
+
+class CompositeResetKeyModel extends CustomResetKeyModel
+{
+    public function getSandboxPrimaryKey(): string|array
+    {
+        return ['id', 'code'];
+    }
+
+    public function getSandboxWritableColumns(): array
+    {
+        return ['name'];
     }
 }

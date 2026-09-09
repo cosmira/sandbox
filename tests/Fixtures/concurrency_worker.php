@@ -44,7 +44,7 @@ try {
     $driver = $configuration['driver'];
     $database = $configuration['database'];
     $isolatedSqlite = $driver === 'sqlite'
-        && str_starts_with(basename($database), 'sandbox-concurrency-')
+        && str_ends_with(basename($database), '.sandbox-concurrency.sqlite')
         && realpath(dirname($database)) === realpath(sys_get_temp_dir());
     $isolatedNative = in_array($driver, ['pgsql', 'mysql'], true)
         && getenv('SANDBOX_TEST_ALLOW_DESTRUCTIVE') === '1'
@@ -76,10 +76,9 @@ try {
         $sandbox->edit(1, function (): void {
             ConcurrentItem::query()->where('id', 1)->update(['name' => 'edited draft']);
             signal('READY');
-            $read = [STDIN];
-            $write = $except = [];
-            if (stream_select($read, $write, $except, 15) !== 1 || trim((string) fgets(STDIN)) !== 'release') {
-                throw new RuntimeException('Timed out waiting for the release barrier.');
+            // The supervising Process enforces the barrier timeout on every platform.
+            if (trim((string) fgets(STDIN)) !== 'release') {
+                throw new RuntimeException('The release barrier was closed without a release signal.');
             }
         });
     } elseif (in_array($operation, ['open', 'save', 'commit', 'rollback'], true)) {

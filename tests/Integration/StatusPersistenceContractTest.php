@@ -24,6 +24,16 @@ use PHPUnit\Framework\Attributes\Test;
 
 final class StatusPersistenceContractTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        try {
+            Schema::dropIfExists('status_contract_items_sb');
+            Schema::dropIfExists('status_contract_items');
+        } finally {
+            parent::tearDown();
+        }
+    }
+
     public static function vetoedOperations(): iterable
     {
         foreach (['saving', 'updating'] as $event) {
@@ -38,6 +48,7 @@ final class StatusPersistenceContractTest extends TestCase
     public function rejectedStatusPersistenceRollsBackDataAndDoesNotEmitSuccess(string $event, string $operation): void
     {
         foreach (['status_contract_items', 'status_contract_items_sb'] as $name) {
+            Schema::dropIfExists($name);
             Schema::create($name, function (Blueprint $table): void {
                 $table->integer('id')->primary();
                 $table->string('name');
@@ -54,6 +65,7 @@ final class StatusPersistenceContractTest extends TestCase
         $sandbox->models(StatusPersistenceModel::class);
         Event::fake([SandboxOpened::class, SandboxCommitted::class, SandboxSaved::class, SandboxRolledBack::class]);
         $eventName = 'eloquent.'.$event.': '.SandboxStatus::class;
+        $previousListeners = Event::getRawListeners()[$eventName] ?? [];
         Event::listen($eventName, fn (): bool => false);
 
         try {
@@ -67,6 +79,9 @@ final class StatusPersistenceContractTest extends TestCase
             $this->assertSame('Sandbox status update was rejected.', $exception->getMessage());
         } finally {
             Event::forget($eventName);
+            foreach ($previousListeners as $listener) {
+                Event::listen($eventName, $listener);
+            }
         }
 
         $this->assertSame($before, SandboxStatus::firstOrFail()->getAttributes());

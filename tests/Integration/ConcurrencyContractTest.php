@@ -27,7 +27,9 @@ final class ConcurrencyContractTest extends TestCase
     {
         parent::getEnvironmentSetUp($app);
         if ($app['config']->get('database.connections.testing.driver') === 'sqlite') {
-            $this->databaseFile = tempnam(sys_get_temp_dir(), 'sandbox-concurrency-');
+            $temporaryFile = tempnam(sys_get_temp_dir(), 'sandbox-concurrency-');
+            $this->databaseFile = $temporaryFile.'.sandbox-concurrency.sqlite';
+            rename($temporaryFile, $this->databaseFile);
             $app['config']->set('database.connections.testing.database', $this->databaseFile);
             $app['config']->set('database.connections.testing.transaction_mode', 'IMMEDIATE');
             $app['config']->set('database.connections.testing.busy_timeout', 10000);

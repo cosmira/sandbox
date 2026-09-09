@@ -19,6 +19,7 @@ final class ProcedureCallerTest extends TestCase
             ['pgsql', 'SELECT app.open_draft(?, ?)'],
             ['mysql', 'CALL app.open_draft(?, ?)'],
             ['oracle', 'BEGIN app.open_draft(?, ?); END;'],
+            ['oci8', 'BEGIN app.open_draft(?, ?); END;'],
         ];
     }
 
@@ -38,8 +39,10 @@ final class ProcedureCallerTest extends TestCase
     public function rejectsUntrustedIdentifiersBeforeCallingTheDatabase(): void
     {
         $connection = $this->createMock(Connection::class);
+        $connection->method('getDriverName')->willReturn('pgsql');
         $connection->expects($this->never())->method('statement');
         $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid procedure identifier.');
         (new ProcedureCaller())->call($connection, 'open_draft(); DROP TABLE users');
     }
 
@@ -47,8 +50,10 @@ final class ProcedureCallerTest extends TestCase
     public function rejectsAssociativeBindings(): void
     {
         $connection = $this->createMock(Connection::class);
+        $connection->method('getDriverName')->willReturn('pgsql');
         $connection->expects($this->never())->method('statement');
         $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Procedure parameters must be positional.');
         (new ProcedureCaller())->call($connection, 'open_draft', ['user' => 7]);
     }
 

@@ -37,6 +37,16 @@ final class SandboxResolvingModelsTest extends TestCase
     }
 
     #[Test]
+    public function explicitRestoreClearsPreviouslyResolvedModels(): void
+    {
+        $event = new SandboxResolvingModels(Request::create('/categories', 'POST'));
+        $event->models(SandboxEventModelStub::class);
+        SandboxResolvingModels::restoreActiveTables();
+        $this->assertFalse(SandboxEventModelStub::isUsingSandbox());
+        $this->assertSame('sandbox_event_items', (new SandboxEventModelStub())->getTable());
+    }
+
+    #[Test]
     public function eventUsesTheInjectedRegistry(): void
     {
         $registry = new TrackingSandboxEventRegistry();

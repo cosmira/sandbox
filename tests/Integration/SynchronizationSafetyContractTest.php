@@ -115,6 +115,83 @@ final class SynchronizationSafetyContractTest extends TestCase
         $this->assertSame(['NEW', null], DB::table('sync_contract_sb')->orderBy('id')->pluck('value')->all());
     }
 
+    #[Test]
+    public function compositeKeysAreCopiedWhenOnlyValueColumnsAreSelected(): void
+    {
+        foreach (['composite_sync', 'composite_sync_sb'] as $table) {
+            Schema::create($table, function (Blueprint $blueprint): void {
+                $blueprint->integer('tenant');
+                $blueprint->integer('sequence');
+                $blueprint->string('value');
+                $blueprint->primary(['tenant', 'sequence']);
+            });
+        }
+
+        try {
+            $rows = [
+                ['tenant' => 1, 'sequence' => 1, 'value' => 'first'],
+                ['tenant' => 1, 'sequence' => 2, 'value' => 'second'],
+                ['tenant' => 2, 'sequence' => 1, 'value' => 'third'],
+            ];
+            DB::table('composite_sync')->insert($rows);
+            DB::table('composite_sync_sb')->insert(['tenant' => 1, 'sequence' => 2, 'value' => 'old']);
+            (new SandboxTableSynchronizer(DB::connection()))->sync(
+                'composite_sync', 'composite_sync_sb', ['tenant', 'sequence'], ['value'], null,
+            );
+            $actual = DB::table('composite_sync_sb')->orderBy('tenant')->orderBy('sequence')->get()
+                ->map(fn (object $row): array => (array) $row)->all();
+            $this->assertEquals($rows, $actual);
+        } finally {
+            Schema::dropIfExists('composite_sync_sb');
+            Schema::dropIfExists('composite_sync');
+        }
+    }
+
+    #[Test]
+    public function eachMatchedRowIsUpdatedOnceWithoutCrossJoiningOtherKeys(): void
+    {
+        DB::table('sync_contract')->insert([
+            ['id' => 1, 'value' => 'one'], ['id' => 2, 'value' => 'two'], ['id' => 3, 'value' => 'three'],
+        ]);
+        DB::table('sync_contract_sb')->insert([
+            ['id' => 1, 'value' => 'old one'], ['id' => 2, 'value' => 'old two'],
+        ]);
+        $connection = DB::connection();
+        $connection->enableQueryLog();
+
+        try {
+            $this->sync(null);
+            $updates = array_filter($connection->getQueryLog(), fn (array $query): bool => str_starts_with(strtolower($query['query']), 'update '));
+            $this->assertCount(2, $updates, 'Matched rows must not be repeatedly updated by a Cartesian join.');
+            $this->assertSame(['one', 'two', 'three'], DB::table('sync_contract_sb')->orderBy('id')->pluck('value')->all());
+        } finally {
+            $connection->disableQueryLog();
+            $connection->flushQueryLog();
+        }
+    }
+
+    #[Test]
+    public function insertionUsesBoundedBatchesAndKeepsTheLastPartialBatch(): void
+    {
+        $rows = array_map(fn (int $id): array => ['id' => $id, 'value' => 'row '.$id], range(1, 501));
+        foreach (array_chunk($rows, 250) as $chunk) {
+            DB::table('sync_contract')->insert($chunk);
+        }
+        $connection = DB::connection();
+        $connection->enableQueryLog();
+
+        try {
+            $this->sync(null);
+            $inserts = array_filter($connection->getQueryLog(), fn (array $query): bool => str_starts_with(strtolower($query['query']), 'insert '));
+            $this->assertCount(2, $inserts, 'The portable 500-row batch must not become one insert per row.');
+            $this->assertSame(501, DB::table('sync_contract_sb')->count());
+            $this->assertSame('row 501', DB::table('sync_contract_sb')->where('id', 501)->value('value'));
+        } finally {
+            $connection->disableQueryLog();
+            $connection->flushQueryLog();
+        }
+    }
+
     private function sync(?string $changeColumn): void
     {
         (new SandboxTableSynchronizer(DB::connection()))->sync(
