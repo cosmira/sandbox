@@ -17,7 +17,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     env:
-      SANDBOX_CONCURRENCY_REPETITIONS: ${{ matrix.os == 'windows-latest' && matrix.php == 8.3 && matrix.laravel == '12.*' && matrix.dependency-version == 'prefer-stable' && '100' || '1' }}
+      SANDBOX_CONCURRENCY_REPETITIONS: ${{ matrix.os == 'windows-latest' && matrix.laravel == '12.*' && ((matrix.php == 8.3 && matrix.dependency-version == 'prefer-stable') || (matrix.php == 8.4 && matrix.dependency-version == 'prefer-lowest')) && '100' || '1' }}
 
     strategy:
       fail-fast: false

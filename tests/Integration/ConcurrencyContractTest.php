@@ -152,19 +152,33 @@ final class ConcurrencyContractTest extends TestCase
     private function awaitSignal(Process $process, string $signal, string $context): void
     {
         $output = '';
+        $ready = false;
 
         try {
-            $ready = $process->waitUntil(function (string $type, string $chunk) use (&$output, $signal): bool {
+            foreach ($process->getIterator(Process::ITER_KEEP_OUTPUT) as $type => $chunk) {
                 if ($type === Process::OUT) {
                     $output .= $chunk;
                 }
 
-                return str_contains($output, $signal."\n");
-            });
+                if (str_contains($output, $signal."\n")) {
+                    $ready = true;
+                    break;
+                }
+            }
         } catch (ProcessTimedOutException $exception) {
             $this->fail($context.' barrier '.$signal.': '.$exception->getMessage()."\n".$this->processDiagnostics($process));
         }
         $this->assertTrue($ready, $context.' barrier '.$signal.': '.$this->processDiagnostics($process));
+    }
+
+    #[Test]
+    public function barrierReadsOutputBufferedBeforeWaiting(): void
+    {
+        $process = new Process([PHP_BINARY, '-r', 'fwrite(STDOUT, "READY\n");'], timeout: 20);
+        $process->mustRun();
+
+        $this->assertSame("READY\n", $process->getOutput());
+        $this->awaitSignal($process, 'READY', 'buffered output');
     }
 
     private function processDiagnostics(Process $process): string
