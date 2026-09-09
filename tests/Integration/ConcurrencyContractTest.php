@@ -31,7 +31,7 @@ final class ConcurrencyContractTest extends TestCase
             $this->databaseFile = $temporaryFile.'.sandbox-concurrency.sqlite';
             rename($temporaryFile, $this->databaseFile);
             $app['config']->set('database.connections.testing.database', $this->databaseFile);
-            $app['config']->set('database.connections.testing.transaction_mode', 'IMMEDIATE');
+            $app['config']->set('database.connections.testing.transaction_mode', 'DEFERRED');
             $app['config']->set('database.connections.testing.busy_timeout', 10000);
         }
     }

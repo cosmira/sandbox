@@ -18,6 +18,7 @@ use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\Models\SandboxStatus;
 use Cosmira\Sandbox\Support\SandboxModelRegistry;
 use Cosmira\Sandbox\Support\SandboxRecordRestorer;
+use Cosmira\Sandbox\Support\SandboxStatusLocker;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Event;
@@ -316,7 +317,7 @@ class EloquentSandboxBackend implements SandboxBackend
      */
     private function lockedStatus(): SandboxStatus
     {
-        return $this->statusModel->newQuery()->lockForUpdate()->firstOrFail();
+        return (new SandboxStatusLocker())->query($this->statusModel)->firstOrFail();
     }
 
     /**

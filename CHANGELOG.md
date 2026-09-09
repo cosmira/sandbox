@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0-rc.1 (candidate, not yet released)
+## 0.1.0-rc.1
 
 This is an integration prerelease, not authorization for production rollout.
 No stable release or verified Oracle integration is implied.
@@ -41,6 +41,11 @@ responses >= 400 roll back writes and a newly acquired lock. Same-owner reopenin
 is a no-op. Completed transition events are dispatched after the outer commit;
 a listener failure cannot roll back committed data. The caller must distinguish
 post-commit failure from rejection and design external delivery accordingly.
+
+SQLite reserves a write lock on the singleton before reading its status, including
+DEFERRED transactions and PHP 8.2/8.3 where Laravel cannot select IMMEDIATE mode.
+`SandboxStatusLocker` exposes the same lock primitive for custom singleton
+adapters; it requires an enclosing transaction and does not authorize callers.
 
 ### Release Gates
 

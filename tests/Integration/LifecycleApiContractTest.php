@@ -14,6 +14,7 @@ use Cosmira\Sandbox\HasSandbox;
 use Cosmira\Sandbox\Models\SandboxStatus;
 use Cosmira\Sandbox\Sandbox;
 use Cosmira\Sandbox\Support\SandboxModelRegistry;
+use Cosmira\Sandbox\Support\SandboxStatusLocker;
 use Cosmira\Sandbox\Tests\TestCase;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
@@ -79,6 +80,61 @@ final class LifecycleApiContractTest extends TestCase
 
         $this->assertTrue($sandbox->status()->isFree());
         $this->assertSame(2, $sandbox->status()->change_id);
+    }
+
+    #[Test]
+    public function backendDoesNotForceTakeoverByDefault(): void
+    {
+        $backend = app(SandboxBackend::class);
+        $backend->open(1);
+        $this->expectException(SandboxException::class);
+        $this->expectExceptionCode(SandboxException::CODE_SANDBOX_LOCKED);
+        $backend->open(2);
+    }
+
+    #[Test]
+    public function resumingSavedDraftClearsLastOperationWithoutResetEvent(): void
+    {
+        $sandbox = app(Sandbox::class);
+        $sandbox->open(1);
+        $sandbox->save(1);
+        Event::fake([Events\SandboxResetting::class]);
+        $sandbox->open(2);
+        $this->assertNull($sandbox->status()->last_operation);
+        $this->assertTrue($sandbox->status()->isLockedBy(2));
+        Event::assertNotDispatched(Events\SandboxResetting::class);
+    }
+
+    #[Test]
+    public function statusLockerRejectsCallsOutsideATransaction(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Sandbox status locking requires a transaction.');
+        (new SandboxStatusLocker())->query(new SandboxStatus());
+    }
+
+    #[Test]
+    public function statusLockIsAcquiredBeforeReadingWithoutChangingTheStatus(): void
+    {
+        $before = SandboxStatus::firstOrFail()->getAttributes();
+        $connection = DB::connection();
+        $connection->enableQueryLog();
+
+        try {
+            $status = $connection->transaction(fn () => (new SandboxStatusLocker())
+                ->query(new SandboxStatus())->firstOrFail());
+            $queries = $connection->getQueryLog();
+            $this->assertSame($before, $status->getAttributes());
+            if ($connection->getDriverName() === 'sqlite') {
+                $this->assertStringStartsWith('update ', strtolower($queries[0]['query']));
+                $this->assertStringStartsWith('select ', strtolower($queries[1]['query']));
+            } else {
+                $this->assertStringContainsString('for update', strtolower($queries[0]['query']));
+            }
+        } finally {
+            $connection->disableQueryLog();
+            $connection->flushQueryLog();
+        }
     }
 
     #[Test]
