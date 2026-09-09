@@ -35,14 +35,13 @@ trait SandboxTestHelpers
     protected function commitSandbox(
         int|string|null $userId = null,
         ?string $note = null,
-        bool $async = true,
     ): void {
         $userId ??= auth()->user()?->getAuthIdentifier();
         if (! $userId) {
             throw new \RuntimeException('No user ID provided and no authenticated user found');
         }
 
-        Sandbox::for($userId)->commit($note, $async);
+        Sandbox::for($userId)->commit($note);
     }
 
     /**
@@ -150,8 +149,13 @@ trait SandboxTestHelpers
      *
      * @param class-string<Model>|Model $modelOrClass
      */
-    protected function applySandbox(string|Model $modelOrClass): void
+    protected function applySandbox(string|Model $modelOrClass, int|string|null $userId = null): void
     {
-        Sandbox::resetSandboxData($modelOrClass);
+        $userId ??= auth()->user()?->getAuthIdentifier();
+        if ($userId === null) {
+            throw new \RuntimeException('No user ID provided and no authenticated user found');
+        }
+
+        Sandbox::reset($userId, $modelOrClass);
     }
 }

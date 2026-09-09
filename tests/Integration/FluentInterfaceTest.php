@@ -81,7 +81,7 @@ final class FluentInterfaceTest extends TestCase
         Event::assertDispatched(SandboxCommitting::class);
         Event::assertDispatched(
             SandboxCommitted::class,
-            fn (SandboxCommitted $event): bool => $event->asyncUpdater === true,
+            fn (SandboxCommitted $event): bool => $event->note === 'Test commit',
         );
     }
 
@@ -144,6 +144,7 @@ final class FluentInterfaceTest extends TestCase
     public function fluentBuilderCanApplyAndResetModels(): void
     {
         BuilderResetModelStub::$synced = 0;
+        Sandbox::for(1)->open();
 
         $applyBuilder = Sandbox::for(1)->apply(BuilderResetModelStub::class);
         $resetBuilder = Sandbox::for(1)->reset(BuilderResetModelStub::class);

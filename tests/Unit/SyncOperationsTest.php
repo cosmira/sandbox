@@ -6,10 +6,12 @@ namespace Cosmira\Sandbox\Tests\Unit;
 
 use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\HasSandbox;
+use Cosmira\Sandbox\Models\SandboxStatus;
 use Cosmira\Sandbox\Sandbox;
 use Cosmira\Sandbox\Support\SandboxTableSynchronizer;
 use Cosmira\Sandbox\Tests\TestCase;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Schema\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
@@ -157,7 +159,7 @@ final class SyncOperationsTest extends TestCase
     }
 
     #[Test]
-    public function resetSandboxDoesNotUpdateRowsWhenTrackedColumnIsUnchanged(): void
+    public function resetSandboxCopiesChangesEvenWhenTrackedColumnIsUnchanged(): void
     {
         SimpleModelStub::setTrackedChangeColumn();
 
@@ -198,7 +200,7 @@ final class SyncOperationsTest extends TestCase
         SimpleModelStub::resetSandbox();
 
         $this->assertSame(100, DB::table('items_sb')->where('id', 1)->value('value'));
-        $this->assertSame(999, DB::table('items_sb')->where('id', 2)->value('value'));
+        $this->assertSame(200, DB::table('items_sb')->where('id', 2)->value('value'));
     }
 
     #[Test]
@@ -518,7 +520,11 @@ final class SyncOperationsTest extends TestCase
             ],
         ]);
 
-        app(Sandbox::class)->resetSandboxData(SimpleModelStub::class);
+        SandboxStatus::query()->update([
+            'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
+            'user_id' => 1,
+        ]);
+        app(Sandbox::class)->resetSandboxData(1, SimpleModelStub::class);
 
         $this->assertSame(1, DB::table('items_sb')->count());
         $this->assertSame(100, DB::table('items_sb')->where('id', 1)->value('value'));
@@ -530,7 +536,11 @@ final class SyncOperationsTest extends TestCase
         $this->expectException(SandboxException::class);
         $this->expectExceptionCode(SandboxException::CODE_MODEL_NOT_REGISTERED);
 
-        app(Sandbox::class)->resetSandboxData(\stdClass::class);
+        SandboxStatus::query()->update([
+            'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
+            'user_id' => 1,
+        ]);
+        app(Sandbox::class)->resetSandboxData(1, \stdClass::class);
     }
 
     #[Test]
@@ -539,7 +549,11 @@ final class SyncOperationsTest extends TestCase
         $this->expectException(SandboxException::class);
         $this->expectExceptionCode(SandboxException::CODE_MODEL_NOT_REGISTERED);
 
-        app(Sandbox::class)->resetSandboxData(NonSandboxSyncModelStub::class);
+        SandboxStatus::query()->update([
+            'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
+            'user_id' => 1,
+        ]);
+        app(Sandbox::class)->resetSandboxData(1, NonSandboxSyncModelStub::class);
     }
 
     #[Test]
@@ -551,7 +565,11 @@ final class SyncOperationsTest extends TestCase
         $this->expectException(SandboxException::class);
         $this->expectExceptionCode(SandboxException::CODE_MODEL_NOT_REGISTERED);
 
-        app(Sandbox::class)->resetSandboxData($model);
+        SandboxStatus::query()->update([
+            'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
+            'user_id' => 1,
+        ]);
+        app(Sandbox::class)->resetSandboxData(1, $model);
     }
 
     #[Test]
@@ -563,7 +581,11 @@ final class SyncOperationsTest extends TestCase
         $this->expectException(SandboxException::class);
         $this->expectExceptionCode(SandboxException::CODE_MODEL_NOT_REGISTERED);
 
-        app(Sandbox::class)->resetSandboxData($model);
+        SandboxStatus::query()->update([
+            'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
+            'user_id' => 1,
+        ]);
+        app(Sandbox::class)->resetSandboxData(1, $model);
     }
 
     #[Test]
@@ -575,7 +597,11 @@ final class SyncOperationsTest extends TestCase
         $this->expectException(SandboxException::class);
         $this->expectExceptionCode(SandboxException::CODE_MODEL_NOT_REGISTERED);
 
-        app(Sandbox::class)->resetSandboxData($model);
+        SandboxStatus::query()->update([
+            'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
+            'user_id' => 1,
+        ]);
+        app(Sandbox::class)->resetSandboxData(1, $model);
     }
 
     #[Test]
@@ -594,7 +620,11 @@ final class SyncOperationsTest extends TestCase
         $model = new SimpleModelStub();
         $model->id = 1;
 
-        app(Sandbox::class)->resetSandboxData($model);
+        SandboxStatus::query()->update([
+            'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
+            'user_id' => 1,
+        ]);
+        app(Sandbox::class)->resetSandboxData(1, $model);
 
         $this->assertSame(100, DB::table('items_sb')->where('id', 1)->value('value'));
     }
@@ -617,7 +647,11 @@ final class SyncOperationsTest extends TestCase
         $model = new SimpleModelStub();
         $model->id = 7;
 
-        app(Sandbox::class)->resetSandboxData($model);
+        SandboxStatus::query()->update([
+            'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
+            'user_id' => 1,
+        ]);
+        app(Sandbox::class)->resetSandboxData(1, $model);
 
         $this->assertSame(1, DB::table('items_sb')->count());
         $this->assertSame('keyed', DB::table('items_sb')->where('id', 7)->value('name'));
@@ -648,7 +682,11 @@ final class SyncOperationsTest extends TestCase
         $model = new SimpleModelStub();
         $model->id = 1;
 
-        app(Sandbox::class)->resetSandboxData($model);
+        SandboxStatus::query()->update([
+            'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
+            'user_id' => 1,
+        ]);
+        app(Sandbox::class)->resetSandboxData(1, $model);
 
         $this->assertSame(200, DB::table('items_sb')->where('id', 1)->value('value'));
     }
@@ -669,7 +707,11 @@ final class SyncOperationsTest extends TestCase
         $model = new SimpleModelStub();
         $model->id = 1;
 
-        app(Sandbox::class)->resetSandboxData($model);
+        SandboxStatus::query()->update([
+            'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
+            'user_id' => 1,
+        ]);
+        app(Sandbox::class)->resetSandboxData(1, $model);
 
         $this->assertFalse(DB::table('items_sb')->where('id', 1)->exists());
         $this->assertSame(0, DB::table('items_sb')->count());
@@ -760,26 +802,25 @@ final class SyncOperationsTest extends TestCase
     #[Test]
     public function synchronizerSkipsInsertionWhenNoColumnsCanBeResolved(): void
     {
-        Schema::shouldReceive('getColumnListing')
+        $schema = \Mockery::mock(Builder::class);
+        $schema->shouldReceive('getColumnListing')
             ->once()
             ->with('items')
             ->andReturn([]);
 
-        try {
-            $synchronizer = new SandboxTableSynchronizer();
+        $connection = \Mockery::mock(DB::connection());
+        $connection->shouldReceive('getSchemaBuilder')->once()->andReturn($schema);
+        $synchronizer = new SandboxTableSynchronizer($connection);
 
-            $synchronizer->sync(
-                sourceTable: 'items',
-                targetTable: 'items_sb',
-                keyColumns: ['id'],
-                columns: [],
-                changeColumn: null,
-            );
+        $synchronizer->sync(
+            sourceTable: 'items',
+            targetTable: 'items_sb',
+            keyColumns: ['id'],
+            columns: [],
+            changeColumn: null,
+        );
 
-            $this->assertSame(0, DB::table('items_sb')->count());
-        } finally {
-            Schema::swap(DB::connection()->getSchemaBuilder());
-        }
+        $this->assertSame(0, DB::table('items_sb')->count());
     }
 
     #[Test]

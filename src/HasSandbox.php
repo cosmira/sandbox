@@ -6,8 +6,6 @@ namespace Cosmira\Sandbox;
 
 use Cosmira\Sandbox\Support\SandboxTableSynchronizer;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Adds sandbox table switching and synchronization to an Eloquent model.
@@ -51,12 +49,24 @@ trait HasSandbox
      */
     protected static bool $usesSandbox = false;
 
+    private ?string $sandboxActiveTable = null;
+
+    private ?string $sandboxResolvedTable = null;
+
     /**
      * Get the active table name for the model.
      */
     public function getActiveTable(): string
     {
-        return parent::getTable();
+        return $this->sandboxActiveTable ??= parent::getTable();
+    }
+
+    public function setTable($table): static
+    {
+        $this->getActiveTable();
+        $this->sandboxResolvedTable = $table;
+
+        return $this;
     }
 
     /**
@@ -72,7 +82,8 @@ trait HasSandbox
      */
     public function getTableForQuery(): string
     {
-        return static::$usesSandbox ? $this->getSandboxTable() : $this->getActiveTable();
+        return $this->sandboxResolvedTable
+            ?? (static::$usesSandbox ? $this->getSandboxTable() : $this->getActiveTable());
     }
 
     /**
@@ -170,6 +181,8 @@ trait HasSandbox
      */
     protected function scopeSandbox(Builder $query): Builder
     {
+        $query->getModel()->setTable($this->getSandboxTable());
+
         return $query->from($this->getSandboxTable());
     }
 
@@ -178,6 +191,8 @@ trait HasSandbox
      */
     protected function scopeActive(Builder $query): Builder
     {
+        $query->getModel()->setTable($this->getActiveTable());
+
         return $query->from($this->getActiveTable());
     }
 
@@ -222,14 +237,14 @@ trait HasSandbox
     ): void {
         $instance = new static();
 
-        DB::transaction(function () use (
+        $instance->getConnection()->transaction(function () use (
             $sourceTable,
             $targetTable,
             $sourceAlias,
             $targetAlias,
             $instance,
         ): void {
-            static::synchronizer()->sync(
+            (new SandboxTableSynchronizer($instance->getConnection()))->sync(
                 sourceTable: $sourceTable,
                 targetTable: $targetTable,
                 keyColumns: $instance->getSandboxPrimaryKeyColumns(),
@@ -239,14 +254,6 @@ trait HasSandbox
                 targetAlias: $targetAlias,
             );
         });
-    }
-
-    /**
-     * Create the table synchronizer for sandbox data.
-     */
-    private static function synchronizer(): SandboxTableSynchronizer
-    {
-        return new SandboxTableSynchronizer();
     }
 
     /**
@@ -287,7 +294,7 @@ trait HasSandbox
      */
     protected function getSandboxSyncColumns(): array
     {
-        return static::$sandboxSyncColumns ?? Schema::getColumnListing($this->getActiveTable());
+        return static::$sandboxSyncColumns ?? $this->getConnection()->getSchemaBuilder()->getColumnListing($this->getActiveTable());
     }
 
     /**

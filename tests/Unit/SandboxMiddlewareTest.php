@@ -52,7 +52,7 @@ final class SandboxMiddlewareTest extends TestCase
     #[Test]
     public function readRequestsUseSandboxTablesWhenSandboxIsActive(): void
     {
-        SandboxStatus::query()->update(['status' => SandboxStatusEnum::Locked]);
+        SandboxStatus::query()->update(['status' => SandboxStatusEnum::Locked, 'user_id' => 1]);
 
         Event::listen(SandboxResolvingModels::class, function (
             SandboxResolvingModels $event,
@@ -62,6 +62,7 @@ final class SandboxMiddlewareTest extends TestCase
 
         $middleware = new SandboxMiddleware();
         $request = Request::create('/categories', 'GET');
+        $request->setUserResolver(fn () => new StringIdentifierUserStub('1'));
 
         $middleware->handle($request, function (): string {
             $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandbox());
@@ -69,7 +70,7 @@ final class SandboxMiddlewareTest extends TestCase
             return 'response';
         });
 
-        $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandbox());
+        $this->assertFalse(MiddlewareSandboxModelStub::isUsingSandbox());
     }
 
     #[Test]
@@ -80,6 +81,7 @@ final class SandboxMiddlewareTest extends TestCase
 
         $middleware = new SandboxMiddleware();
         $request = Request::create('/categories', 'GET');
+        $request->setUserResolver(fn () => new StringIdentifierUserStub('1'));
 
         $middleware->handle($request, fn (): string => 'response');
 
@@ -94,6 +96,7 @@ final class SandboxMiddlewareTest extends TestCase
         $registry = new TrackingSandboxMiddlewareRegistry();
         $middleware = new SandboxMiddleware($registry);
         $request = Request::create('/categories', 'GET');
+        $request->setUserResolver(fn () => new StringIdentifierUserStub('1'));
 
         $middleware->handle($request, fn (): string => 'response');
 
@@ -126,7 +129,7 @@ final class SandboxMiddlewareTest extends TestCase
         });
 
         $this->assertSame('response', $response);
-        $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandbox());
+        $this->assertFalse(MiddlewareSandboxModelStub::isUsingSandbox());
     }
 
     #[Test]
@@ -234,7 +237,7 @@ final class SandboxMiddlewareTest extends TestCase
     }
 
     #[Test]
-    public function writeRequestsRejectSavedDraftsOwnedByAnotherUser(): void
+    public function writeRequestsResumeSavedDraftsOwnedByAnotherUser(): void
     {
         SandboxStatus::query()->update([
             'status'  => SandboxStatusEnum::Saved,
@@ -246,16 +249,8 @@ final class SandboxMiddlewareTest extends TestCase
         $request = Request::create('/categories', 'PATCH');
         $request->setUserResolver(fn () => $user);
 
-        try {
-            $middleware->handle($request, fn (): string => 'response');
-        } catch (HttpException $exception) {
-            $this->assertSame(403, $exception->getStatusCode());
-            $this->assertTrue(SandboxStatus::first()?->isSaved());
-
-            return;
-        }
-
-        $this->fail('Request modified another user saved draft.');
+        $this->assertSame('response', $middleware->handle($request, fn (): string => 'response'));
+        $this->assertTrue(SandboxStatus::first()?->isLockedBy(2));
     }
 
     #[Test]
@@ -428,7 +423,7 @@ final class SandboxMiddlewareTest extends TestCase
     }
 
     #[Test]
-    public function writeRequestsKeepSandboxTablesWhenTheRequestFails(): void
+    public function writeRequestsRestoreTablesWhenTheRequestFails(): void
     {
         SandboxStatus::query()->update([
             'status'  => SandboxStatusEnum::Locked,
@@ -452,12 +447,12 @@ final class SandboxMiddlewareTest extends TestCase
                 throw new RuntimeException('Request failed.');
             });
         } finally {
-            $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandbox());
+            $this->assertFalse(MiddlewareSandboxModelStub::isUsingSandbox());
         }
     }
 
     #[Test]
-    public function terminateRestoresRequestLocalSandboxTableSwitches(): void
+    public function requestLocalSandboxTableSwitchesAreRestoredBeforeTerminate(): void
     {
         SandboxStatus::query()->update([
             'status'  => SandboxStatusEnum::Locked,
@@ -480,7 +475,7 @@ final class SandboxMiddlewareTest extends TestCase
             return 'response';
         });
 
-        $this->assertTrue(MiddlewareSandboxModelStub::isUsingSandbox());
+        $this->assertFalse(MiddlewareSandboxModelStub::isUsingSandbox());
 
         $middleware->terminate($request, $response);
 

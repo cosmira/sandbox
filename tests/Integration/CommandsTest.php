@@ -73,19 +73,19 @@ final class CommandsTest extends TestCase
     }
 
     #[Test]
-    public function commitCommandPassesAsyncFlagToTheSandboxLifecycle(): void
+    public function commitCommandPassesNoteToTheSandboxLifecycle(): void
     {
         app(Sandbox::class)->open(1);
         Event::fake([SandboxCommitted::class]);
 
         $this->artisan('sandbox:commit', [
             'userId'  => '1',
-            '--async' => true,
+            '--note'  => 'Command commit',
         ])->assertSuccessful();
 
         Event::assertDispatched(
             SandboxCommitted::class,
-            fn (SandboxCommitted $event): bool => $event->asyncUpdater === true,
+            fn (SandboxCommitted $event): bool => $event->note === 'Command commit',
         );
     }
 
@@ -279,7 +279,7 @@ final class CommandsTest extends TestCase
     {
         $this->artisan('sandbox:rollback', ['userId' => '1'])
             ->assertFailed()
-            ->expectsOutput('Failed to roll back sandbox: Cannot close: sandbox is already free. Use open() first.');
+            ->expectsOutput('Failed to roll back sandbox: Sandbox must be open before mutation. Use open() first.');
     }
 
     #[Test]

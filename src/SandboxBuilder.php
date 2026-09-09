@@ -48,9 +48,9 @@ class SandboxBuilder
     /**
      * Commit the sandbox for the builder user.
      */
-    public function commit(?string $note = null, bool $asyncUpdater = true): void
+    public function commit(?string $note = null): void
     {
-        $this->sandbox->commit($this->userId, $note, $asyncUpdater);
+        $this->sandbox->commit($this->userId, $note);
     }
 
     /**
@@ -68,7 +68,7 @@ class SandboxBuilder
      */
     public function apply(string|Model $modelOrClass): self
     {
-        $this->sandbox->resetSandboxData($modelOrClass);
+        $this->sandbox->reset($this->userId, $modelOrClass);
 
         return $this;
     }
@@ -80,7 +80,7 @@ class SandboxBuilder
      */
     public function reset(string|Model $modelOrClass): self
     {
-        $this->sandbox->resetSandboxData($modelOrClass);
+        $this->sandbox->reset($this->userId, $modelOrClass);
 
         return $this;
     }

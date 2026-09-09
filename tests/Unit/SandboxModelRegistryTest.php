@@ -38,6 +38,32 @@ final class SandboxModelRegistryTest extends TestCase
     }
 
     #[Test]
+    public function nestedContextsRestoreDynamicallyResolvedModelsAfterFailure(): void
+    {
+        $registry = new SandboxModelRegistry();
+        $registry->usingTables(true, function () use ($registry): void {
+            $registry->useSandbox(RegistrySandboxModelStub::class);
+            $this->assertTrue(RegistrySandboxModelStub::isUsingSandbox());
+
+            try {
+                $registry->usingTables(false, function (): never {
+                    $this->assertFalse(RegistrySandboxModelStub::isUsingSandbox());
+
+                    throw new \RuntimeException('nested failure');
+                });
+            } catch (\RuntimeException) {
+                $this->assertTrue(RegistrySandboxModelStub::isUsingSandbox());
+            }
+        });
+
+        $this->assertFalse(RegistrySandboxModelStub::isUsingSandbox());
+        RegistrySandboxModelStub::useSandbox();
+        $registry->restoreActiveTables();
+        $this->assertTrue(RegistrySandboxModelStub::isUsingSandbox());
+        RegistrySandboxModelStub::useActive();
+    }
+
+    #[Test]
     public function itSwitchesRegisteredModelsAndRestoresOnlyRememberedModels(): void
     {
         $registry = new SandboxModelRegistry();

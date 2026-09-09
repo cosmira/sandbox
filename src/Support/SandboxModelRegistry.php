@@ -26,6 +26,37 @@ class SandboxModelRegistry
      */
     private array $switched = [];
 
+    /** @var list<array<class-string<Model>, bool>> */
+    private array $contexts = [];
+
+    public function usingTables(bool $draft, callable $callback): mixed
+    {
+        $previousSwitched = $this->switched;
+        $this->contexts[] = [];
+
+        try {
+            foreach (array_unique([...$this->all(), ...$this->switched]) as $model) {
+                $this->rememberContext($model);
+                $draft ? $model::useSandbox() : $model::useActive();
+            }
+
+            return $callback();
+        } finally {
+            foreach (array_pop($this->contexts) as $model => $previous) {
+                $previous ? $model::useSandbox() : $model::useActive();
+            }
+            $this->switched = $previousSwitched;
+        }
+    }
+
+    private function rememberContext(string $model): void
+    {
+        $index = array_key_last($this->contexts);
+        if ($index !== null && ! array_key_exists($model, $this->contexts[$index])) {
+            $this->contexts[$index][$model] = $model::isUsingSandbox();
+        }
+    }
+
     /**
      * Register models that should participate in the sandbox workflow.
      *
@@ -63,6 +94,7 @@ class SandboxModelRegistry
         foreach ($models as $model) {
             $this->ensureCanUseSandboxTables($model);
 
+            $this->rememberContext($model);
             $this->remember($this->switched, $model);
             $model::useSandbox();
         }

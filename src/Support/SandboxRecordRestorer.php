@@ -6,7 +6,6 @@ namespace Cosmira\Sandbox\Support;
 
 use Cosmira\Sandbox\Exceptions\SandboxException;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Restores one sandbox row from its active table counterpart.
@@ -30,10 +29,10 @@ class SandboxRecordRestorer
         }
 
         $columns = $this->syncColumnsFor($model, $keyColumns);
-        $row = DB::table($model->getActiveTable())->where($keyValues)->first($columns);
+        $row = $model->getConnection()->table($model->getActiveTable())->where($keyValues)->first($columns);
 
         if ($row === null) {
-            DB::table($model->getSandboxTable())->where($keyValues)->delete();
+            $model->getConnection()->table($model->getSandboxTable())->where($keyValues)->delete();
         } else {
             $this->writeSandboxRow($model, $keyValues, (array) $row, $keyColumns);
         }
@@ -137,10 +136,10 @@ class SandboxRecordRestorer
         array $attributes,
         array $keyColumns,
     ): void {
-        $query = DB::table($model->getSandboxTable())->where($keyValues);
+        $query = $model->getConnection()->table($model->getSandboxTable())->where($keyValues);
 
         if (! $query->exists()) {
-            DB::table($model->getSandboxTable())->insert($attributes);
+            $model->getConnection()->table($model->getSandboxTable())->insert($attributes);
 
             return;
         }
@@ -151,7 +150,7 @@ class SandboxRecordRestorer
         }
 
         if ($values !== []) {
-            DB::table($model->getSandboxTable())->where($keyValues)->update($values);
+            $model->getConnection()->table($model->getSandboxTable())->where($keyValues)->update($values);
         }
     }
 }

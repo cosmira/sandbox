@@ -75,10 +75,10 @@ final class SandboxExceptionHandlingTest extends TestCase
     }
 
     /**
-     * Test that rollback does not trigger user lock exception.
+     * Authorized takeover must explicitly precede a foreign draft rollback.
      */
     #[Test]
-    public function closingWithRollbackIgnoresUserLock(): void
+    public function closingWithRollbackRequiresExplicitTakeover(): void
     {
         $this->createDatabaseUser(1);
         $this->createDatabaseUser(2);
@@ -88,6 +88,7 @@ final class SandboxExceptionHandlingTest extends TestCase
             'user_id' => 1,
         ]);
 
+        $this->sandbox->open(2, force: true);
         $this->sandbox->rollback(2);
 
         $status = SandboxStatus::first();

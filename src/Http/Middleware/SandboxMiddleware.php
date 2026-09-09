@@ -6,144 +6,76 @@ namespace Cosmira\Sandbox\Http\Middleware;
 
 use Closure;
 use Cosmira\Sandbox\Events\SandboxResolvingModels;
+use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\Models\SandboxStatus;
 use Cosmira\Sandbox\Sandbox;
 use Cosmira\Sandbox\Support\SandboxModelRegistry;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
-/**
- * Routes eligible requests through sandbox tables.
- */
 class SandboxMiddleware
 {
-    /**
-     * The registry that knows which models participate in sandbox mode.
-     */
     private readonly SandboxModelRegistry $models;
 
-    /**
-     * The sandbox lifecycle manager.
-     */
     private readonly Sandbox $sandbox;
 
-    /**
-     * Create a middleware instance.
-     */
-    public function __construct(
-        ?SandboxModelRegistry $models = null,
-        ?Sandbox $sandbox = null,
-    ) {
+    public function __construct(?SandboxModelRegistry $models = null, ?Sandbox $sandbox = null)
+    {
         $this->models = $models ?? app(SandboxModelRegistry::class);
         $this->sandbox = $sandbox ?? app(Sandbox::class);
     }
 
-    /**
-     * Handle an incoming request.
-     */
     public function handle(Request $request, Closure $next): mixed
     {
-        $status = SandboxStatus::first();
+        $user = $request->user()?->getAuthIdentifier();
 
-        if ($this->isWriteRequest($request)) {
-            $status = $this->prepareSandboxForWrite($request, $status);
-            $this->ensureWriteIsAllowed($request, $status);
+        if ($request->isMethodSafe()) {
+            return $this->sandbox->read($user, fn (bool $draft) => $this->resolve($request, $next, $draft));
         }
 
-        if ($this->sandboxIsActive($status)) {
-            $this->resolveSandboxModels($request);
+        abort_if($user === null, 403, 'An authenticated user is required to open the sandbox.');
+
+        try {
+            return $this->sandbox->edit($user, function () use ($request, $next): mixed {
+                $response = $this->resolve($request, $next, true);
+
+                if ($response instanceof Response && $response->getStatusCode() >= 400) {
+                    throw new SandboxResponseRejected($response);
+                }
+
+                return $response;
+            });
+        } catch (SandboxResponseRejected $exception) {
+            return $exception->response;
+        } catch (SandboxException $exception) {
+            if ($exception->getCode() !== SandboxException::CODE_SANDBOX_LOCKED) {
+                throw $exception;
+            }
+
+            throw new HttpException(403, $exception->getMessage(), $exception);
+        } catch (ModelNotFoundException $exception) {
+            if ($exception->getModel() !== SandboxStatus::class) {
+                throw $exception;
+            }
+
+            abort(403, 'The sandbox status row is missing.');
         }
-
-        return $next($request);
     }
 
-    /**
-     * Reset request-local table switches after the response is sent.
-     */
-    public function terminate(Request $request, mixed $response): void
+    private function resolve(Request $request, Closure $next, bool $draft): mixed
     {
-        SandboxResolvingModels::restoreActiveTables();
+        return $this->models->usingTables($draft, function () use ($request, $next, $draft): mixed {
+            if ($draft) {
+                $this->models->useSandbox();
+                Event::dispatch(new SandboxResolvingModels($request, $this->models));
+            }
+
+            return $next($request);
+        });
     }
 
-    /**
-     * Open or resume the sandbox for the current write request user.
-     */
-    private function prepareSandboxForWrite(Request $request, ?SandboxStatus $status): ?SandboxStatus
-    {
-        if ($status === null || $status->isLocked()) {
-            return $status;
-        }
-
-        $userId = $request->user()?->getAuthIdentifier();
-
-        abort_if(
-            $userId === null,
-            403,
-            'An authenticated user is required to open the sandbox.',
-        );
-
-        if (! $status->isFree() && ! $status->isForUser($userId)) {
-            return $status;
-        }
-
-        $this->sandbox->open($userId);
-
-        return $this->sandbox->status();
-    }
-
-    /**
-     * Reject write requests from users that do not own the active sandbox.
-     */
-    private function ensureWriteIsAllowed(Request $request, ?SandboxStatus $status): void
-    {
-        abort_if(
-            ! $this->userOwnsActiveSandbox($request, $status),
-            403,
-            'Only the user that opened the sandbox may modify sandbox data.',
-        );
-    }
-
-    /**
-     * Determine if the current request may write into sandbox data.
-     */
-    private function userOwnsActiveSandbox(Request $request, ?SandboxStatus $status): bool
-    {
-        if (! $this->sandboxIsActive($status)) {
-            return false;
-        }
-
-        $userId = $request->user()?->getAuthIdentifier();
-
-        if ($userId === null) {
-            return false;
-        }
-
-        return $status->isForUser($userId);
-    }
-
-    /**
-     * Resolve the models that should use sandbox tables for this request.
-     */
-    private function resolveSandboxModels(Request $request): void
-    {
-        $this->models->useSandbox();
-
-        Event::dispatch(new SandboxResolvingModels($request, $this->models));
-    }
-
-    /**
-     * Determine if the request intends to change data.
-     */
-    private function isWriteRequest(Request $request): bool
-    {
-        return ! $request->isMethodSafe();
-    }
-
-    /**
-     * Determine if the persisted sandbox session is currently active.
-     */
-    private function sandboxIsActive(?SandboxStatus $status): bool
-    {
-        return $status !== null && ! $status->isFree();
-    }
+    public function terminate(Request $request, mixed $response): void {}
 }

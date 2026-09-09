@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cosmira\Sandbox\Tests\Unit;
 
 use Carbon\Carbon;
+use Cosmira\Sandbox\Backends\EloquentSandboxBackend;
 use Cosmira\Sandbox\Enums\SandboxOperation;
 use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
 use Cosmira\Sandbox\Events\SandboxCommitted;
@@ -82,7 +83,7 @@ final class SandboxTest extends TestCase
         Event::fake([SandboxResetting::class, SandboxOpened::class]);
 
         $models = new TrackingSandboxRegistry();
-        $sandbox = new Sandbox(models: $models);
+        $sandbox = new Sandbox(models: $models, backend: new EloquentSandboxBackend($models));
 
         $this->createDatabaseUser(1);
         SandboxStatus::factory()->create([
@@ -103,7 +104,7 @@ final class SandboxTest extends TestCase
         Event::fake([SandboxResetting::class, SandboxOpened::class]);
 
         $models = new TrackingSandboxRegistry();
-        $sandbox = new Sandbox(models: $models);
+        $sandbox = new Sandbox(models: $models, backend: new EloquentSandboxBackend($models));
 
         $this->createDatabaseUser(1);
         SandboxStatus::factory()->create([
@@ -120,7 +121,7 @@ final class SandboxTest extends TestCase
     }
 
     #[Test]
-    public function itRejectsSavedDraftsOwnedByAnotherUser(): void
+    public function itResumesSavedDraftsOwnedByAnotherUser(): void
     {
         $this->createDatabaseUser(1);
         $this->createDatabaseUser(2);
@@ -129,10 +130,9 @@ final class SandboxTest extends TestCase
             'user_id' => 2,
         ]);
 
-        $this->expectException(SandboxException::class);
-        $this->expectExceptionCode(20605);
-
         $this->sandbox->open(1);
+
+        $this->assertTrue($this->sandbox->status()->isLockedBy(1));
     }
 
     #[Test]
@@ -191,7 +191,7 @@ final class SandboxTest extends TestCase
         $this->sandbox->open(1, force: true);
 
         Event::assertNotDispatched(SandboxResetting::class);
-        Event::assertDispatched(SandboxOpened::class);
+        Event::assertNotDispatched(SandboxOpened::class);
     }
 
     #[Test]
@@ -234,13 +234,12 @@ final class SandboxTest extends TestCase
             'change_id' => 4,
         ]);
 
-        $this->sandbox->commit(1, asyncUpdater: false);
+        $this->sandbox->commit(1);
 
         Event::assertDispatched(SandboxCommitting::class);
         Event::assertDispatched(SandboxCommitted::class, function (SandboxCommitted $e) {
             return $e->userId === 1
-                && $e->note === null
-                && $e->asyncUpdater === false;
+                && $e->note === null;
         });
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Free, $status->status);
@@ -250,7 +249,7 @@ final class SandboxTest extends TestCase
     }
 
     #[Test]
-    public function itCommitsAsynchronouslyByDefault(): void
+    public function itEmitsApplicationIndependentCommitMetadata(): void
     {
         Event::fake([SandboxCommitted::class]);
 
@@ -264,7 +263,8 @@ final class SandboxTest extends TestCase
 
         Event::assertDispatched(
             SandboxCommitted::class,
-            fn (SandboxCommitted $event): bool => $event->asyncUpdater === true,
+            fn (SandboxCommitted $event): bool => $event->userId === 1
+                && ! property_exists($event, 'asyncUpdater'),
         );
     }
 
@@ -350,10 +350,12 @@ final class SandboxTest extends TestCase
     public function itUsesTheInjectedRecordRestorerForSingleModelResets(): void
     {
         $recordRestorer = new TrackingSandboxRecordRestorer();
-        $sandbox = new Sandbox(recordRestorer: $recordRestorer);
+        $models = new SandboxModelRegistry();
+        $sandbox = new Sandbox(backend: new EloquentSandboxBackend($models, $recordRestorer));
+        SandboxStatus::factory()->create(['status' => SandboxStatusEnum::Locked, 'user_id' => 1]);
         $model = new InjectedSandboxModelStub();
 
-        $sandbox->resetSandboxData($model);
+        $sandbox->resetSandboxData(1, $model);
 
         $this->assertSame([$model], $recordRestorer->restoredModels);
     }
@@ -361,10 +363,11 @@ final class SandboxTest extends TestCase
     #[Test]
     public function itRejectsNonModelClassesDuringReset(): void
     {
+        SandboxStatus::factory()->create(['status' => SandboxStatusEnum::Locked, 'user_id' => 1]);
         $this->expectException(SandboxException::class);
         $this->expectExceptionCode(SandboxException::CODE_MODEL_NOT_REGISTERED);
 
-        $this->sandbox->resetSandboxData(NonModelWithSandboxSyncStub::class);
+        $this->sandbox->resetSandboxData(1, NonModelWithSandboxSyncStub::class);
     }
 
     #[Test]
@@ -408,7 +411,7 @@ final class SandboxTest extends TestCase
         $this->sandbox->open('1');
 
         Event::assertNotDispatched(SandboxResetting::class);
-        Event::assertDispatched(SandboxOpened::class);
+        Event::assertNotDispatched(SandboxOpened::class);
     }
 
     #[Test]

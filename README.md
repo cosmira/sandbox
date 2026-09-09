@@ -45,9 +45,10 @@ flowchart LR
     Locked -. unsafe write .-> Rejected
 ```
 
-The package is intentionally boring at the database layer. It works through
-Eloquent and Laravel's query builder as much as possible, so the same workflow
-can run on SQLite, MySQL, PostgreSQL, Oracle, and other supported connections.
+The default backend uses Eloquent and Laravel's query builder. The RC contract
+targets SQLite, PostgreSQL and MySQL. Oracle integration is not verified; a
+custom backend does not make native procedures transaction-safe automatically.
+See [RC changes and release gates](CHANGELOG.md).
 
 ## Why
 
@@ -90,11 +91,16 @@ discarding the draft is always a deliberate action.
 composer require cosmira/sandbox
 ```
 
-Run the package migrations:
+For a new standalone installation, publish and run the package migrations:
 
 ```bash
+php artisan vendor:publish --tag=sandbox-migrations
 php artisan migrate
 ```
+
+Do not publish these migrations over an existing shared legacy status schema.
+Bind a `SandboxBackend` adapter for that schema instead; the default backend
+expects the package status model, including its primary key.
 
 Each sandboxed model needs an active table and a sandbox table. By default the
 sandbox table is the active table name plus `_sb`.
@@ -160,7 +166,7 @@ Category::query()->create($request->validated());
 When a `POST`, `PUT`, `PATCH`, or `DELETE` request hits the middleware:
 
 - if the sandbox is free, it is reset from active data and opened
-- if the same user saved a draft, it is reopened without resetting data
+- if the draft is saved, an authenticated user can reopen it without resetting data
 - if the same user owns the sandbox, registered models switch to sandbox tables
 - if another user owns the sandbox, the request receives `403`
 - if there is no authenticated user, the request receives `403`
@@ -194,15 +200,20 @@ The package is designed around a single global configuration lock.
 9. Other users cannot send mutating requests to the configuration routes.
 10. The owner explicitly commits, rolls back, or saves the draft.
 
-Safe requests can also use sandbox tables. If a sandbox is active, `GET` and
-`HEAD` requests through the middleware switch registered models to sandbox
-tables for that request. That lets the editor preview the draft while the rest
-of the application can decide how much of the active or draft state it should
-show.
+Safe requests use draft tables only for the owner of a Locked draft or for an
+authenticated reader of a Saved draft. Guests always read active tables.
 
-Middleware only resets request-local model switches after the response. It does
-not close the sandbox. That makes the workflow safe for long-running processes
-such as Octane and RoadRunner without hiding lifecycle decisions in middleware.
+Middleware restores the previous table context through `finally`, including
+exceptions and nested contexts. Sequential requests in one process are covered;
+concurrent coroutine runtimes are not supported. A hydrated model retains its
+original physical table even after the context ends. New queries use the current
+context, so do not carry hydrated draft models across authorization boundaries.
+
+An edit includes the lock, opening and writes in one database transaction.
+Exceptions and HTTP responses with status >= 400 roll back that transaction.
+Completed lifecycle events run after commit. A failed listener cannot undo an
+already committed transition; the host must handle notifications and retries
+without claiming that committed data was rolled back.
 
 ## When The Configuration Is Locked
 
@@ -213,7 +224,7 @@ through the `sandbox` middleware makes a simple decision:
 flowchart TD
     Request["Request through sandbox middleware"]
     Method{"Safe request?"}
-    Active{"Sandbox active?"}
+    Active{"Locked owner or authenticated Saved reader?"}
     Auth{"Authenticated user?"}
     Status{"Sandbox status"}
     Open["Open sandbox for current user"]
@@ -231,16 +242,19 @@ flowchart TD
     Auth -- no --> Reject
     Auth -- yes --> Status
     Status -- free --> Open --> DraftWrite
-    Status -- "saved by current user" --> Reopen --> DraftWrite
+    Status -- "saved draft" --> Reopen --> DraftWrite
     Status -- "owned by current user" --> DraftWrite
     Status -- "owned by another user" --> Reject
 ```
 
 | Request | Owner | What happens |
 | --- | --- | --- |
-| `GET` / `HEAD` | Any user | Registered models are switched to sandbox tables |
+| `GET` / `HEAD` | Locked owner | Read draft |
+| `GET` / `HEAD` | Other user or guest during Locked | Read active |
+| `GET` / `HEAD` | Authenticated user during Saved | Read draft |
+| `GET` / `HEAD` | Guest, or anyone during Free | Read active |
 | `POST` / `PUT` / `PATCH` / `DELETE` | Sandbox owner | Allowed; writes go to sandbox tables |
-| `POST` / `PUT` / `PATCH` / `DELETE` | Saved draft owner | Draft is reopened for sandbox writes |
+| `POST` / `PUT` / `PATCH` / `DELETE` | Authenticated user during Saved | Draft is reopened for sandbox writes |
 | `POST` / `PUT` / `PATCH` / `DELETE` | Another user | The request is rejected with `403` |
 | `POST` / `PUT` / `PATCH` / `DELETE` | Guest | The request is rejected with `403` |
 
@@ -291,7 +305,7 @@ Sandbox::for($ownerId)->rollback(); // discard draft and unlock
 ```
 
 `save()` pauses editing. The draft stays in sandbox tables and can be reopened
-later by the owner.
+later by an authenticated user allowed to edit by the host application.
 
 ```php
 Sandbox::for($ownerId)->save(); // keep the draft for later
@@ -329,7 +343,7 @@ Builder methods:
 | Method | Description |
 | --- | --- |
 | `open(force: false, note: null)` | Refreshes and locks a free sandbox, or reopens a saved draft |
-| `commit(note: null, asyncUpdater: true)` | Applies sandbox data to active tables |
+| `commit(note: null)` | Applies sandbox data to active tables |
 | `rollback(note: null)` | Resets sandbox data from active tables |
 | `save(note: null)` | Keeps the draft and keeps the sandbox active |
 | `reset($modelOrClass)` | Refreshes one model or table from active data |
@@ -337,7 +351,28 @@ Builder methods:
 | `status()` | Returns the current status row |
 
 `force: true` lets an operator take ownership from another user. Use it for
-admin recovery flows, not for regular editing.
+admin recovery flows, not for regular editing. The application must authorize
+this operation before calling it. `commit`, `rollback`, `save` and `reset`
+require a Locked draft owned by the caller. Open a Saved draft first. Rolling
+back someone else's Locked draft requires an explicitly authorized force-open.
+Opening an already Locked draft as its owner is a no-op, without another event.
+
+Callback API (facade or injected `Sandbox`):
+
+```php
+Sandbox::read($userId, fn (bool $draft) => Product::query()->get());
+Sandbox::read(null, fn (bool $draft) => Product::query()->get()); // guest: active
+Sandbox::edit($userId, fn () => Product::query()->create($attributes));
+Sandbox::reset($userId, Product::class);
+Sandbox::resetSandboxData($userId, $product); // explicit-owner compatibility alias
+```
+
+Bind `Cosmira\Sandbox\Contracts\SandboxBackend` to customize the complete
+lifecycle, including `reset`. Facade and builder operations delegate to that
+backend. The application owns permissions, native procedure selection,
+notifications and external updater execution. A backend must use the selected
+connection and must never commit an enclosing edit transaction internally.
+The default backend rejects registered models on a different connection.
 
 ## Model Registration
 
@@ -419,7 +454,7 @@ Model options:
 | --- | --- | --- |
 | `$sandboxTablePostfix` | `'_sb'` | Sandbox table suffix |
 | `$sandboxPrimaryKey` | model key | Single or composite sync key |
-| `$sandboxTrackChangeColumn` | `'change_date'` | Column used to detect changed rows |
+| `$sandboxTrackChangeColumn` | `'change_date'` | Optional column validated during copying; not an equality shortcut |
 
 Use scopes for explicit one-off reads:
 
@@ -454,11 +489,16 @@ table state even when the callback throws.
 
 ## Synchronization
 
-You can synchronize a model manually.
+Synchronization is an exact snapshot copy by the configured key, including
+composite keys. Matched rows are updated in place, preserving dependent rows;
+missing rows are inserted and target-only rows are deleted. Equal timestamps
+never suppress changed values. Currently even equal matched rows are updated.
+Constraints remain active, and failure rolls back the copy.
 
-```php
-§
-```
+Register models in dependency order and test your schema's foreign-key deletion
+rules. Low-level `resetSandbox`, `applySandbox`, registry and synchronizer calls
+are trusted infrastructure, not authorization APIs. Public application actions
+must go through the backend lifecycle.
 
 The lifecycle methods do this for registered models:
 
@@ -539,7 +579,7 @@ and external integrations.
 | `SandboxOpened` | `userId`, `force`, `note` |
 | `SandboxResetting` | dispatched before sandbox data should be reset |
 | `SandboxCommitting` | dispatched before sandbox data is applied |
-| `SandboxCommitted` | `userId`, `committedAt`, `note`, `asyncUpdater` |
+| `SandboxCommitted` | `userId`, `committedAt`, `note` |
 | `SandboxRollingBack` | dispatched before sandbox data is rolled back |
 | `SandboxRolledBack` | `userId`, `rolledBackAt`, `note` |
 | `SandboxSaved` | `userId`, `savedAt`, `note` |
@@ -578,7 +618,7 @@ class ConfigControllerTest extends TestCase
 Available helpers:
 
 - `openSandbox(userId, force, note)`
-- `commitSandbox(userId, note, async)`
+- `commitSandbox(userId, note)`
 - `rollbackSandbox(userId, note)`
 - `saveSandbox(userId, note)`
 - `assertSandboxFree()`

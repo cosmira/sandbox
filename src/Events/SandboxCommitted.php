@@ -34,9 +34,5 @@ class SandboxCommitted
          */
         public readonly ?string $note,
 
-        /**
-         * Indicates if the updater should run asynchronously.
-         */
-        public readonly bool $asyncUpdater,
     ) {}
 }

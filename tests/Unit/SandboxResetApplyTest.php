@@ -15,8 +15,9 @@ final class SandboxResetApplyTest extends TestCase
     public function resetSandboxDataThrowsWhenModelCannotResetSandbox(): void
     {
         $sandbox = resolve(Sandbox::class);
+        $sandbox->open(1);
         $this->expectException(SandboxException::class);
         $this->expectExceptionCode(SandboxException::CODE_MODEL_NOT_REGISTERED);
-        $sandbox->resetSandboxData(\stdClass::class);
+        $sandbox->resetSandboxData(1, \stdClass::class);
     }
 }

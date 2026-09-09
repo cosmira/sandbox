@@ -17,8 +17,7 @@ class CommitSandboxCommand extends Command
      */
     protected $signature = 'sandbox:commit'
         .' {userId? : The ID or UUID of the user (uses current user if omitted)}'
-        .' {--note= : Optional note for the operation}'
-        .' {--async : Use async updater}';
+        .' {--note= : Optional note for the operation}';
 
     /**
      * The console command description.
@@ -42,7 +41,6 @@ class CommitSandboxCommand extends Command
             $sandbox->commit(
                 $userId,
                 $this->option('note'),
-                $this->option('async') === true,
             );
 
             $this->info('Sandbox committed');

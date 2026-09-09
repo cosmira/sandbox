@@ -33,6 +33,7 @@ class SandboxServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/sandbox.php', 'sandbox');
 
         $this->app->singleton(SandboxModelRegistry::class);
+        $this->app->singleton(Contracts\SandboxBackend::class, Backends\EloquentSandboxBackend::class);
         $this->app->singleton(Sandbox::class);
     }
 

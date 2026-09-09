@@ -164,7 +164,8 @@ final class TestingHelpersTest extends TestCase
     #[Test]
     public function canApplySandboxForModel(): void
     {
-        $this->applySandbox(HelperSwitchModelStub::class);
+        $this->openSandbox(1);
+        $this->applySandbox(HelperSwitchModelStub::class, 1);
 
         $this->assertTrue(HelperSwitchModelStub::$synced);
     }

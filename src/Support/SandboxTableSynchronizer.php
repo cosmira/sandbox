@@ -5,16 +5,24 @@ declare(strict_types=1);
 namespace Cosmira\Sandbox\Support;
 
 use Cosmira\Sandbox\Exceptions\SandboxException;
+use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
+use InvalidArgumentException;
 
 /**
  * Synchronizes rows between active and sandbox tables.
  */
 class SandboxTableSynchronizer
 {
+    private readonly ConnectionInterface $connection;
+
+    public function __construct(?ConnectionInterface $connection = null)
+    {
+        $this->connection = $connection ?? DB::connection();
+    }
+
     /**
      * The number of rows inserted per portable insert batch.
      */
@@ -35,23 +43,25 @@ class SandboxTableSynchronizer
         string $sourceAlias = 'source',
         string $targetAlias = 'target',
     ): void {
-        $this->deleteMissing($targetTable, $sourceTable, $keyColumns);
-
+        if ($keyColumns === []) {
+            throw new InvalidArgumentException('Sandbox synchronization requires at least one key column.');
+        }
         $columns = $columns ?: $this->columnsFrom($sourceTable);
         if ($columns === []) {
             return;
         }
+        if ($changeColumn !== null) {
+            $this->ensureChangeColumn($sourceTable, $columns, $changeColumn);
+        }
+        $columns = array_values(array_unique([...$keyColumns, ...$columns]));
 
-        $this->syncExisting(
-            targetTable: $targetTable,
-            sourceTable: $sourceTable,
-            keyColumns: $keyColumns,
-            columns: $columns,
-            changeColumn: $changeColumn,
-            targetAlias: $targetAlias,
-            sourceAlias: $sourceAlias,
-        );
-        $this->insertMissing($targetTable, $sourceTable, $keyColumns, $columns);
+        $this->connection->transaction(function () use (
+            $sourceTable, $targetTable, $keyColumns, $columns, $targetAlias, $sourceAlias,
+        ): void {
+            $this->deleteMissing($targetTable, $sourceTable, $keyColumns);
+            $this->updateExisting($targetTable, $sourceTable, $keyColumns, $columns, $targetAlias, $sourceAlias);
+            $this->insertMissing($targetTable, $sourceTable, $keyColumns, $columns);
+        });
     }
 
     /**
@@ -64,7 +74,7 @@ class SandboxTableSynchronizer
         string $sourceTable,
         array $keyColumns,
     ): void {
-        DB::table($targetTable)
+        $this->connection->table($targetTable)
             ->whereNotExists(fn (QueryBuilder $query) => $this->matchingRowSubquery(
                 $query,
                 matchTable: $sourceTable,
@@ -80,75 +90,19 @@ class SandboxTableSynchronizer
      * @param array<int, string> $keyColumns
      * @param array<int, string> $columns
      */
-    private function syncExisting(
+    private function updateExisting(
         string $targetTable,
         string $sourceTable,
         array $keyColumns,
         array $columns,
-        ?string $changeColumn,
         string $targetAlias,
         string $sourceAlias,
     ): void {
-        if ($changeColumn === null) {
-            $this->replaceExisting($targetTable, $sourceTable, $keyColumns);
-
-            return;
-        }
-
-        $this->ensureChangeColumn($sourceTable, $columns, $changeColumn);
-
-        $this->updateChanged(
-            targetTable: $targetTable,
-            sourceTable: $sourceTable,
-            keyColumns: $keyColumns,
-            columns: $columns,
-            changeColumn: $changeColumn,
-            targetAlias: $targetAlias,
-            sourceAlias: $sourceAlias,
-        );
-    }
-
-    /**
-     * Delete target rows before replacing them from the source table.
-     *
-     * @param array<int, string> $keyColumns
-     */
-    private function replaceExisting(
-        string $targetTable,
-        string $sourceTable,
-        array $keyColumns,
-    ): void {
-        DB::table($targetTable)
-            ->whereExists(fn (QueryBuilder $query) => $this->matchingRowSubquery(
-                $query,
-                matchTable: $sourceTable,
-                currentTable: $targetTable,
-                keyColumns: $keyColumns,
-            ))
-            ->delete();
-    }
-
-    /**
-     * Update target rows whose tracked column differs from the source table.
-     *
-     * @param array<int, string> $keyColumns
-     * @param array<int, string> $columns
-     */
-    private function updateChanged(
-        string $targetTable,
-        string $sourceTable,
-        array $keyColumns,
-        array $columns,
-        string $changeColumn,
-        string $targetAlias,
-        string $sourceAlias,
-    ): void {
-        foreach ($this->changedRows(
+        foreach ($this->matchingRows(
             $targetTable,
             $sourceTable,
             $keyColumns,
             $columns,
-            $changeColumn,
             $targetAlias,
             $sourceAlias,
         ) as $row) {
@@ -162,29 +116,28 @@ class SandboxTableSynchronizer
             }
 
             if ($values !== []) {
-                DB::table($targetTable)->where($keys)->update($values);
+                $this->connection->table($targetTable)->where($keys)->update($values);
             }
         }
     }
 
     /**
-     * Get source rows that should replace changed target rows.
+     * Read matching rows regardless of timestamp precision or database collation.
      *
      * @param array<int, string> $keyColumns
      * @param array<int, string> $columns
      *
      * @return iterable<int, object>
      */
-    private function changedRows(
+    private function matchingRows(
         string $targetTable,
         string $sourceTable,
         array $keyColumns,
         array $columns,
-        string $changeColumn,
         string $targetAlias,
         string $sourceAlias,
     ): iterable {
-        return DB::table($sourceTable.' as '.$sourceAlias)
+        return $this->connection->table($sourceTable.' as '.$sourceAlias)
             ->join(
                 $targetTable.' as '.$targetAlias,
                 fn (JoinClause $join) => $this->joinOnKeys(
@@ -194,12 +147,6 @@ class SandboxTableSynchronizer
                     $sourceAlias,
                 ),
             )
-            ->where(fn (QueryBuilder $query) => $this->whereTrackedColumnDiffers(
-                $query,
-                $targetAlias,
-                $sourceAlias,
-                $changeColumn,
-            ))
             ->select($this->selectColumns($sourceAlias, $columns))
             ->cursor();
     }
@@ -221,28 +168,6 @@ class SandboxTableSynchronizer
     }
 
     /**
-     * Apply a null-safe condition for changed tracked columns.
-     */
-    private function whereTrackedColumnDiffers(
-        QueryBuilder $query,
-        string $targetAlias,
-        string $sourceAlias,
-        string $changeColumn,
-    ): void {
-        $targetColumn = $targetAlias.'.'.$changeColumn;
-        $sourceColumn = $sourceAlias.'.'.$changeColumn;
-
-        $query
-            ->whereColumn($targetColumn, '!=', $sourceColumn)
-            ->orWhere(function (QueryBuilder $query) use ($targetColumn, $sourceColumn): void {
-                $query->whereNull($targetColumn)->whereNotNull($sourceColumn);
-            })
-            ->orWhere(function (QueryBuilder $query) use ($targetColumn, $sourceColumn): void {
-                $query->whereNotNull($targetColumn)->whereNull($sourceColumn);
-            });
-    }
-
-    /**
      * Insert source rows that are missing from the target table.
      *
      * @param array<int, string> $keyColumns
@@ -254,7 +179,7 @@ class SandboxTableSynchronizer
         array $keyColumns,
         array $columns,
     ): void {
-        $rows = DB::table($sourceTable)
+        $rows = $this->connection->table($sourceTable)
             ->whereNotExists(fn (QueryBuilder $query) => $this->matchingRowSubquery(
                 $query,
                 matchTable: $targetTable,
@@ -280,13 +205,13 @@ class SandboxTableSynchronizer
             $chunk[] = (array) $row;
 
             if (count($chunk) === self::INSERT_CHUNK_SIZE) {
-                DB::table($table)->insert($chunk);
+                $this->connection->table($table)->insert($chunk);
                 $chunk = [];
             }
         }
 
         if ($chunk !== []) {
-            DB::table($table)->insert($chunk);
+            $this->connection->table($table)->insert($chunk);
         }
     }
 
@@ -321,7 +246,7 @@ class SandboxTableSynchronizer
      */
     private function columnsFrom(string $table): array
     {
-        return Schema::getColumnListing($table);
+        return $this->connection->getSchemaBuilder()->getColumnListing($table);
     }
 
     /**

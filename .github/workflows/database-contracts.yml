@@ -1,0 +1,68 @@
+name: Database Contracts
+
+on:
+  pull_request:
+  push:
+    paths:
+      - '.github/workflows/**'
+      - '**.php'
+      - 'phpunit.xml'
+      - 'composer.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [pgsql, mysql]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: sandbox_contract
+          POSTGRES_USER: sandbox_test
+          POSTGRES_PASSWORD: sandbox_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sandbox_test -d sandbox_contract"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: sandbox_contract
+          MYSQL_USER: sandbox_test
+          MYSQL_PASSWORD: sandbox_test
+          MYSQL_ROOT_PASSWORD: sandbox_root_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -psandbox_root_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      SANDBOX_TEST_DRIVER: ${{ matrix.database }}
+      SANDBOX_TEST_DATABASE: sandbox_contract
+      SANDBOX_TEST_USERNAME: sandbox_test
+      SANDBOX_TEST_PASSWORD: sandbox_test
+      SANDBOX_TEST_ALLOW_DESTRUCTIVE: '1'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pdo_mysql, pdo_sqlite, mbstring
+          coverage: none
+          tools: composer:v2
+      - run: composer install --no-interaction --prefer-dist
+      - run: vendor/bin/phpunit --order-by=random --random-order-seed=92001 --log-junit build/database-contracts.xml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: contracts-${{ matrix.database }}
+          path: build/database-contracts.xml
+          if-no-files-found: error

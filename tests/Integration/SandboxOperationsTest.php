@@ -212,10 +212,10 @@ final class SandboxOperationsTest extends TestCase
     }
 
     /**
-     * Test asyncUpdater parameter usage.
+     * Test commit note persistence.
      */
     #[Test]
-    public function commitWithAsyncUpdaterTrue(): void
+    public function commitWithNote(): void
     {
         $this->createDatabaseUser(1);
         SandboxStatus::factory()->create([
@@ -223,17 +223,18 @@ final class SandboxOperationsTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $this->sandbox->commit(1, asyncUpdater: true);
+        $this->sandbox->commit(1, note: 'Ready');
 
         $status = SandboxStatus::first();
+        $this->assertSame('Ready', $status->note);
         $this->assertSame(SandboxStatusEnum::Free, $status->status);
     }
 
     /**
-     * Test asyncUpdater parameter with false.
+     * Test commit without a note.
      */
     #[Test]
-    public function commitWithAsyncUpdaterFalse(): void
+    public function commitWithoutNote(): void
     {
         $this->createDatabaseUser(1);
         SandboxStatus::factory()->create([
@@ -241,9 +242,10 @@ final class SandboxOperationsTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $this->sandbox->commit(1, asyncUpdater: false);
+        $this->sandbox->commit(1);
 
         $status = SandboxStatus::first();
+        $this->assertNull($status->note);
         $this->assertSame(SandboxStatusEnum::Free, $status->status);
     }
 }
