@@ -86,7 +86,7 @@ class Sandbox
         return $this->connection()->transaction(function () use ($user, $callback): mixed {
             $this->open($user);
 
-            return $this->models->usingTables(true, $callback);
+            return $this->models->usingTables(true, $callback, $this->connection());
         });
     }
 

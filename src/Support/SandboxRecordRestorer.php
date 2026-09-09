@@ -79,13 +79,7 @@ class SandboxRecordRestorer
      */
     private function keyValues(Model $model, array $keyColumns): array
     {
-        $keyName = $model->getSandboxPrimaryKey();
-
-        if (is_array($keyName)) {
-            return array_intersect_key($model->getAttributes(), array_flip($keyColumns));
-        }
-
-        return [$keyName => $model->getKey()];
+        return array_intersect_key($model->getAttributes(), array_flip($keyColumns));
     }
 
     /**

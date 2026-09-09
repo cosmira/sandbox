@@ -71,7 +71,7 @@ class EloquentSandboxBackend implements SandboxBackend
                 Event::dispatch(new SandboxResetting());
             }
 
-            $status->update([
+            $this->updateStatusRow($status, [
                 'last_operation' => null,
                 'status'         => SandboxStatusEnum::Locked,
                 'user_id'        => $userId,
@@ -304,7 +304,11 @@ class EloquentSandboxBackend implements SandboxBackend
      */
     private function updateStatusRow(SandboxStatus $status, array $attributes): void
     {
-        $status->forceFill($attributes)->save();
+        throw_unless(
+            $status->forceFill($attributes)->save(),
+            SandboxException::class,
+            'Sandbox status update was rejected.',
+        );
     }
 
     /**

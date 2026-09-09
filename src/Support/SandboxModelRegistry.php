@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cosmira\Sandbox\Support;
 
 use Cosmira\Sandbox\Exceptions\SandboxException;
+use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -29,13 +30,18 @@ class SandboxModelRegistry
     /** @var list<array<class-string<Model>, bool>> */
     private array $contexts = [];
 
-    public function usingTables(bool $draft, callable $callback): mixed
+    private ?ConnectionInterface $connection = null;
+
+    public function usingTables(bool $draft, callable $callback, ?ConnectionInterface $connection = null): mixed
     {
         $previousSwitched = $this->switched;
+        $previousConnection = $this->connection;
+        $this->connection = $connection ?? $previousConnection;
         $this->contexts[] = [];
 
         try {
             foreach (array_unique([...$this->all(), ...$this->switched]) as $model) {
+                $this->ensureConnection($model);
                 $this->rememberContext($model);
                 $draft ? $model::useSandbox() : $model::useActive();
             }
@@ -46,6 +52,7 @@ class SandboxModelRegistry
                 $previous ? $model::useSandbox() : $model::useActive();
             }
             $this->switched = $previousSwitched;
+            $this->connection = $previousConnection;
         }
     }
 
@@ -66,6 +73,7 @@ class SandboxModelRegistry
     {
         foreach ($models as $model) {
             $this->ensureCanUseSandboxTables($model);
+            $this->ensureConnection($model);
             $this->ensureCanSync($model);
 
             $this->remember($this->models, $model);
@@ -93,6 +101,7 @@ class SandboxModelRegistry
 
         foreach ($models as $model) {
             $this->ensureCanUseSandboxTables($model);
+            $this->ensureConnection($model);
 
             $this->rememberContext($model);
             $this->remember($this->switched, $model);
@@ -199,5 +208,19 @@ class SandboxModelRegistry
         if (! in_array($model, $models, true)) {
             $models[] = $model;
         }
+    }
+
+    private function ensureConnection(string $model): void
+    {
+        if ($this->connection === null) {
+            return;
+        }
+
+        throw_unless(
+            is_subclass_of($model, Model::class) && (new $model())->getConnection() === $this->connection,
+            SandboxException::class,
+            sprintf('Model %s must use the sandbox context connection.', $model),
+            SandboxException::CODE_MODEL_NOT_REGISTERED,
+        );
     }
 }

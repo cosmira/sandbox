@@ -6,6 +6,8 @@ namespace Cosmira\Sandbox\Tests\Integration;
 
 use Cosmira\Sandbox\Enums\SandboxStatus as State;
 use Cosmira\Sandbox\Events\SandboxOpened;
+use Cosmira\Sandbox\Events\SandboxResolvingModels;
+use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\HasSandbox;
 use Cosmira\Sandbox\Http\Middleware\SandboxMiddleware;
 use Cosmira\Sandbox\Models\SandboxStatus;
@@ -174,6 +176,35 @@ final class RequestIsolationContractTest extends TestCase
         $this->assertFalse(RequestItem::isUsingSandbox());
     }
 
+    #[Test]
+    public function dynamicModelsCannotEscapeTheEditConnection(): void
+    {
+        config()->set('database.connections.secondary', ['driver' => 'sqlite', 'database' => ':memory:']);
+        $secondary = DB::connection('secondary');
+        $secondary->getSchemaBuilder()->create('remote_items_sb', function (Blueprint $table): void {
+            $table->integer('id')->primary();
+            $table->string('name');
+        });
+        $secondary->table('remote_items_sb')->insert(['id' => 1, 'name' => 'original']);
+        Event::listen(SandboxResolvingModels::class, function (SandboxResolvingModels $event): void {
+            $event->models(RemoteRequestItem::class);
+            RemoteRequestItem::query()->where('id', 1)->update(['name' => 'escaped']);
+        });
+
+        try {
+            (new SandboxMiddleware())->handle($this->request('PATCH', 1), fn () => new Response('rejected', 422));
+            $this->fail('A dynamic model on another connection must be rejected before it can write.');
+        } catch (SandboxException $exception) {
+            $this->assertSame(SandboxException::CODE_MODEL_NOT_REGISTERED, $exception->getCode());
+        } finally {
+            $this->assertSame('original', $secondary->table('remote_items_sb')->value('name'));
+            $this->assertFalse(RemoteRequestItem::isUsingSandbox());
+            $this->assertFalse(RequestItem::isUsingSandbox());
+            $this->assertTrue(SandboxStatus::firstOrFail()->isFree());
+            DB::purge('secondary');
+        }
+    }
+
     private function request(string $method, ?int $user): Request
     {
         $request = Request::create('/items', $method);
@@ -197,6 +228,17 @@ class RequestItem extends Model
     use HasSandbox;
 
     protected $table = 'request_items';
+
+    public $timestamps = false;
+}
+
+class RemoteRequestItem extends Model
+{
+    use HasSandbox;
+
+    protected $connection = 'secondary';
+
+    protected $table = 'remote_items';
 
     public $timestamps = false;
 }
