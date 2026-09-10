@@ -60,6 +60,10 @@ trait HasSandbox
      */
     protected static function getSandboxTrackChangeColumn(): ?string
     {
+        if (static::$sandboxTrackChangeColumn === 'change_date' && ! (new static())->timestamps) {
+            return null;
+        }
+
         return static::$sandboxTrackChangeColumn;
     }
 

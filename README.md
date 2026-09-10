@@ -544,7 +544,13 @@ Model options:
 | --- | --- | --- |
 | `$sandboxTablePostfix` | `'_sb'` | Sandbox table suffix |
 | `$sandboxPrimaryKey` | model key | Single or composite sync key |
-| `$sandboxTrackChangeColumn` | `'change_date'` | Optional column validated during copying; not an equality shortcut |
+| `$sandboxTrackChangeColumn` | `'change_date'` when `$timestamps` is enabled; otherwise none | Optional column validated during copying; not an equality shortcut |
+
+Models with `public $timestamps = false` do not need a tracking-column override.
+Synchronization still copies changed values. Custom column names and explicit `null`
+remain supported, and `withoutTimestamps()` does not change the model's sync configuration.
+To require `change_date` on a model with timestamps disabled, override
+`getSandboxTrackChangeColumn()` to return it explicitly.
 
 Use scopes for explicit one-off reads:
 

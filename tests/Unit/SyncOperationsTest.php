@@ -11,9 +11,11 @@ use Cosmira\Sandbox\Sandbox;
 use Cosmira\Sandbox\Support\SandboxTableSynchronizer;
 use Cosmira\Sandbox\Tests\TestCase;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Schema\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use ReflectionMethod;
 
@@ -44,6 +46,67 @@ final class SyncOperationsTest extends TestCase
             $table->integer('value')->default(0);
             $table->timestamps();
         });
+    }
+
+    #[Test]
+    #[DataProvider('syncDirections')]
+    public function timestampFreeModelsSynchronizeWithoutATrackingOverride(
+        string $operation,
+        string $source,
+        string $target,
+    ): void {
+        foreach (['items', 'items_sb'] as $table) {
+            Schema::table($table, fn (Blueprint $blueprint) => $blueprint->dropTimestamps());
+        }
+        DB::table($source)->insert([
+            ['id' => 1, 'name' => 'changed'],
+            ['id' => 2, 'name' => 'added'],
+        ]);
+        DB::table($target)->insert([
+            ['id' => 1, 'name' => 'stale'],
+            ['id' => 3, 'name' => 'removed'],
+        ]);
+
+        TimestampFreeModelStub::{$operation}();
+
+        $this->assertSame([1 => 'changed', 2 => 'added'], DB::table($target)
+            ->orderBy('id')->pluck('name', 'id')->all());
+    }
+
+    public static function syncDirections(): array
+    {
+        return [
+            'reset' => ['resetSandbox', 'items', 'items_sb'],
+            'apply' => ['applySandbox', 'items_sb', 'items'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('requiredTrackingColumns')]
+    public function configuredTrackingColumnsStillRequireTheirSchema(
+        string $modelClass,
+        string $column,
+        bool $withoutTimestamps,
+    ): void {
+        $this->expectException(SandboxException::class);
+        $this->expectExceptionCode(SandboxException::CODE_SYNC_COLUMN_MISSING);
+        $this->expectExceptionMessage('Sandbox sync column ['.$column.'] does not exist on [items].');
+
+        if ($withoutTimestamps) {
+            $modelClass::withoutTimestamps(fn () => $modelClass::resetSandbox());
+        } else {
+            $modelClass::resetSandbox();
+        }
+    }
+
+    public static function requiredTrackingColumns(): array
+    {
+        return [
+            'default'               => [TimestampedModelStub::class, 'change_date', false],
+            'temporary suppression' => [TimestampedModelStub::class, 'change_date', true],
+            'custom property'       => [CustomTrackingModelStub::class, 'revision', false],
+            'method override'       => [ExplicitTrackingModelStub::class, 'change_date', false],
+        ];
     }
 
     /**
@@ -974,5 +1037,32 @@ class PartialSandboxRestoreModelWithoutActiveTableStub extends Model
     public function getSandboxWritableColumns(): array
     {
         return ['id', 'name', 'value', 'created_at', 'updated_at'];
+    }
+}
+
+class TimestampFreeModelStub extends Model
+{
+    use HasSandbox;
+
+    protected $table = 'items';
+
+    public $timestamps = false;
+}
+
+class TimestampedModelStub extends TimestampFreeModelStub
+{
+    public $timestamps = true;
+}
+
+class CustomTrackingModelStub extends TimestampFreeModelStub
+{
+    protected static ?string $sandboxTrackChangeColumn = 'revision';
+}
+
+class ExplicitTrackingModelStub extends TimestampFreeModelStub
+{
+    protected static function getSandboxTrackChangeColumn(): ?string
+    {
+        return 'change_date';
     }
 }
