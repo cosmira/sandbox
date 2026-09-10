@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cosmira\Sandbox\Support;
 
 use Cosmira\Sandbox\Exceptions\SandboxException;
+use Cosmira\Sandbox\SandboxCopyRules;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Database\Query\JoinClause;
@@ -42,6 +43,8 @@ class SandboxTableSynchronizer
         ?string $changeColumn,
         string $sourceAlias = 'source',
         string $targetAlias = 'target',
+        ?string $parentColumn = null,
+        ?SandboxCopyRules $rules = null,
     ): void {
         if ($keyColumns === []) {
             throw new InvalidArgumentException('Sandbox synchronization requires at least one key column.');
@@ -54,14 +57,77 @@ class SandboxTableSynchronizer
             $this->ensureChangeColumn($sourceTable, $columns, $changeColumn);
         }
         $columns = array_values(array_unique([...$keyColumns, ...$columns]));
+        $updateColumns = $rules?->updateColumns ?? $columns;
+        if (array_diff($updateColumns, $columns) !== []) {
+            throw new InvalidArgumentException('Sandbox update columns must exist in the copied table.');
+        }
 
         $this->connection->transaction(function () use (
-            $sourceTable, $targetTable, $keyColumns, $columns, $targetAlias, $sourceAlias,
+            $sourceTable, $targetTable, $keyColumns, $columns, $targetAlias, $sourceAlias, $parentColumn,
+            $rules, $updateColumns,
         ): void {
-            $this->deleteMissing($targetTable, $sourceTable, $keyColumns);
-            $this->updateExisting($targetTable, $sourceTable, $keyColumns, $columns, $targetAlias, $sourceAlias);
-            $this->insertMissing($targetTable, $sourceTable, $keyColumns, $columns);
+            if ($parentColumn === null) {
+                $this->deleteMissing($targetTable, $sourceTable, $keyColumns, $rules);
+            }
+            if ($parentColumn !== null) {
+                $this->insertTreeMissing($targetTable, $sourceTable, $keyColumns, $columns, $parentColumn, $rules);
+            }
+            if ($updateColumns !== []) {
+                $this->updateExisting(
+                    $targetTable, $sourceTable, $keyColumns,
+                    array_values(array_unique([...$keyColumns, ...$updateColumns])),
+                    $targetAlias, $sourceAlias, $rules,
+                );
+            }
+            if ($parentColumn === null) {
+                $this->insertMissing($targetTable, $sourceTable, $keyColumns, $columns, $rules);
+            } else {
+                $this->deleteMissing($targetTable, $sourceTable, $keyColumns, $rules);
+            }
         });
+    }
+
+    /**
+     * Insert successive tree levels without depending on source row order or deferred foreign keys.
+     *
+     * @param list<string> $keyColumns
+     * @param list<string> $columns
+     */
+    private function insertTreeMissing(
+        string $targetTable,
+        string $sourceTable,
+        array $keyColumns,
+        array $columns,
+        string $parentColumn,
+        ?SandboxCopyRules $rules,
+    ): void {
+        if (count($keyColumns) !== 1 || ! in_array($parentColumn, $columns, true)) {
+            throw new InvalidArgumentException('Sandbox tree synchronization requires one key and a selected parent column.');
+        }
+
+        $missing = $this->connection->table($sourceTable)
+            ->whereNotExists(fn (QueryBuilder $query) => $this->matchingRowSubquery(
+                $query, $targetTable, $sourceTable, $keyColumns,
+            ));
+        if ($rules?->inserts !== null) {
+            ($rules->inserts)($missing);
+        }
+
+        while ((clone $missing)->exists()) {
+            $ready = (clone $missing)->where(function (QueryBuilder $query) use (
+                $sourceTable, $targetTable, $parentColumn, $keyColumns,
+            ): void {
+                $query->whereNull($sourceTable.'.'.$parentColumn)
+                    ->orWhereColumn($sourceTable.'.'.$parentColumn, $sourceTable.'.'.$keyColumns[0])
+                    ->orWhereExists(fn (QueryBuilder $parent) => $parent
+                        ->select($targetTable.'.'.$keyColumns[0])->from($targetTable)
+                        ->whereColumn($targetTable.'.'.$keyColumns[0], $sourceTable.'.'.$parentColumn));
+            })->select($columns);
+
+            if ($this->insertChunked($targetTable, $ready->cursor()) === 0) {
+                throw new SandboxException('Sandbox tree contains an unresolved parent or a cycle.');
+            }
+        }
     }
 
     /**
@@ -73,15 +139,19 @@ class SandboxTableSynchronizer
         string $targetTable,
         string $sourceTable,
         array $keyColumns,
+        ?SandboxCopyRules $rules,
     ): void {
-        $this->connection->table($targetTable)
+        $query = $this->connection->table($targetTable)
             ->whereNotExists(fn (QueryBuilder $query) => $this->matchingRowSubquery(
                 $query,
                 matchTable: $sourceTable,
                 currentTable: $targetTable,
                 keyColumns: $keyColumns,
-            ))
-            ->delete();
+            ));
+        if ($rules?->deletes !== null) {
+            ($rules->deletes)($query);
+        }
+        $query->delete();
     }
 
     /**
@@ -97,6 +167,7 @@ class SandboxTableSynchronizer
         array $columns,
         string $targetAlias,
         string $sourceAlias,
+        ?SandboxCopyRules $rules,
     ): void {
         foreach ($this->matchingRows(
             $targetTable,
@@ -105,6 +176,7 @@ class SandboxTableSynchronizer
             $columns,
             $targetAlias,
             $sourceAlias,
+            $rules,
         ) as $row) {
             $attributes = (array) $row;
             $keys = [];
@@ -136,8 +208,9 @@ class SandboxTableSynchronizer
         array $columns,
         string $targetAlias,
         string $sourceAlias,
+        ?SandboxCopyRules $rules,
     ): iterable {
-        return $this->connection->table($sourceTable.' as '.$sourceAlias)
+        $query = $this->connection->table($sourceTable.' as '.$sourceAlias)
             ->join(
                 $targetTable.' as '.$targetAlias,
                 fn (JoinClause $join) => $this->joinOnKeys(
@@ -147,8 +220,12 @@ class SandboxTableSynchronizer
                     $sourceAlias,
                 ),
             )
-            ->select($this->selectColumns($sourceAlias, $columns))
-            ->cursor();
+            ->select($this->selectColumns($sourceAlias, $columns));
+        if ($rules?->updates !== null) {
+            ($rules->updates)($query);
+        }
+
+        return $query->cursor();
     }
 
     /**
@@ -178,18 +255,21 @@ class SandboxTableSynchronizer
         string $sourceTable,
         array $keyColumns,
         array $columns,
+        ?SandboxCopyRules $rules,
     ): void {
-        $rows = $this->connection->table($sourceTable)
+        $query = $this->connection->table($sourceTable)
             ->whereNotExists(fn (QueryBuilder $query) => $this->matchingRowSubquery(
                 $query,
                 matchTable: $targetTable,
                 currentTable: $sourceTable,
                 keyColumns: $keyColumns,
             ))
-            ->select($columns)
-            ->cursor();
+            ->select($columns);
+        if ($rules?->inserts !== null) {
+            ($rules->inserts)($query);
+        }
 
-        $this->insertChunked($targetTable, $rows);
+        $this->insertChunked($targetTable, $query->cursor());
     }
 
     /**
@@ -197,12 +277,14 @@ class SandboxTableSynchronizer
      *
      * @param iterable<int, object> $rows
      */
-    private function insertChunked(string $table, iterable $rows): void
+    private function insertChunked(string $table, iterable $rows): int
     {
         $chunk = [];
+        $inserted = 0;
 
         foreach ($rows as $row) {
             $chunk[] = (array) $row;
+            $inserted++;
 
             if (count($chunk) === self::INSERT_CHUNK_SIZE) {
                 $this->connection->table($table)->insert($chunk);
@@ -213,6 +295,8 @@ class SandboxTableSynchronizer
         if ($chunk !== []) {
             $this->connection->table($table)->insert($chunk);
         }
+
+        return $inserted;
     }
 
     /**

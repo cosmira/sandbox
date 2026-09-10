@@ -31,4 +31,19 @@ final class SandboxTableTest extends TestCase
         yield 'duplicate key' => ['links', ['id', 'id'], null];
         yield 'associative keys' => ['links', ['first' => 'id'], null];
     }
+
+    #[Test]
+    #[DataProvider('invalidTrees')]
+    public function invalidTreeDefinitionsAreRejected(array $keys, string $parent): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        new SandboxTable('nodes', $keys, parentColumn: $parent);
+    }
+
+    public static function invalidTrees(): iterable
+    {
+        yield 'empty parent' => [['id'], ''];
+        yield 'composite key' => [['id', 'type'], 'parent_id'];
+        yield 'same key and parent' => [['id'], 'id'];
+    }
 }

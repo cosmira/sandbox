@@ -467,6 +467,41 @@ in the order of registration across `models()` and `tables()` calls. This
 does not solve cyclic foreign-key dependencies. `save()` preserves the draft.
 Table registrations do not appear in the model registry's `all()` result.
 
+For a self-referencing tree with a single primary key, pass
+`parentColumn: 'parent_id'`. The synchronizer inserts parents before their
+children and before reparenting existing rows, including across insert chunks.
+Unresolved parents or cycles among missing rows reject the copy and roll back
+the transaction. This option does not resolve cycles between different tables.
+
+Applications sharing a draft with another writer can describe the rows and
+columns they own without implementing a copying algorithm:
+
+```php
+new SandboxTable('contacts', ['id'], reset: new SandboxCopyRules(
+    updateColumns: ['label', 'note'],
+    inserts: fn (Builder $query) => $query->where('source', 'local'),
+    deletes: fn (Builder $query) => $query->where('source', 'local'),
+));
+```
+
+Import `Cosmira\Sandbox\SandboxCopyRules` and `Illuminate\Database\Query\Builder`.
+Insert/delete filters receive queries over the respective unaliased table.
+The optional `updates` filter receives a joined query with `source` and `target`
+aliases. `updateColumns: null` copies all columns; `[]` preserves matched rows.
+Inserted rows still copy all columns. These rules apply to reset only; apply
+continues to copy the complete draft. Filters are trusted application query
+configuration and must not replace the table, selected columns or key predicates.
+
+An application integrating a shared configuration outside its model registry
+may extend `EloquentSandboxBackend` and override `protected initializeDraft(): void`.
+That method replaces default initialization only when opening a Free draft,
+inside the locked transaction. The application can iterate its ordered
+`SandboxTable` definitions and call `resetSandbox($this->connection())`.
+Opening, owner checks, Saved continuation, status persistence and success events
+remain in the package. Acquire any host-specific locks before calling `parent::open()`
+and preserve the host's established lock order. Initializers must not commit or
+perform DDL. Completion behavior is a separate host integration decision.
+
 Automatic relationship switching currently covers `belongsToMany`, not
 polymorphic many-to-many relationships. Raw `DB::table()` calls and literal
 table-qualified column names are not rewritten. Individual `reset()` still

@@ -18,6 +18,8 @@ final readonly class SandboxTable
         public string $table,
         public array $primaryKey,
         ?string $sandboxTable = null,
+        public ?string $parentColumn = null,
+        public ?SandboxCopyRules $reset = null,
     ) {
         $this->sandboxTable = $sandboxTable ?? $table.'_sb';
 
@@ -35,11 +37,15 @@ final readonly class SandboxTable
         if (count(array_unique($primaryKey)) !== count($primaryKey)) {
             throw new InvalidArgumentException('Sandbox primary key columns must be unique.');
         }
+        if ($parentColumn !== null && (trim($parentColumn) === '' || count($primaryKey) !== 1
+            || $parentColumn === $primaryKey[0])) {
+            throw new InvalidArgumentException('Sandbox trees require one primary key and a distinct parent column.');
+        }
     }
 
     public function resetSandbox(ConnectionInterface $connection): void
     {
-        $this->synchronize($connection, $this->table, $this->sandboxTable);
+        $this->synchronize($connection, $this->table, $this->sandboxTable, $this->reset);
     }
 
     public function applySandbox(ConnectionInterface $connection): void
@@ -47,14 +53,20 @@ final readonly class SandboxTable
         $this->synchronize($connection, $this->sandboxTable, $this->table);
     }
 
-    private function synchronize(ConnectionInterface $connection, string $source, string $target): void
-    {
+    private function synchronize(
+        ConnectionInterface $connection,
+        string $source,
+        string $target,
+        ?SandboxCopyRules $rules = null,
+    ): void {
         (new SandboxTableSynchronizer($connection))->sync(
             sourceTable: $source,
             targetTable: $target,
             keyColumns: $this->primaryKey,
             columns: [],
             changeColumn: null,
+            parentColumn: $this->parentColumn,
+            rules: $rules,
         );
     }
 }

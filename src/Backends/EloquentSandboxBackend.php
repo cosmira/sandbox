@@ -67,7 +67,7 @@ class EloquentSandboxBackend implements SandboxBackend
 
             if ($status->isFree()) {
                 Event::dispatch(new SandboxResetting());
-                $this->models->resetSandbox();
+                $this->initializeDraft();
             } elseif ($force && ! $status->isForUser($userId)) {
                 Event::dispatch(new SandboxResetting());
             }
@@ -84,6 +84,12 @@ class EloquentSandboxBackend implements SandboxBackend
 
             Log::info('Sandbox opened', ['user_id' => $userId]);
         });
+    }
+
+    /** Customize shared-draft preparation while retaining the package's opening lifecycle. */
+    protected function initializeDraft(): void
+    {
+        $this->models->resetSandbox();
     }
 
     /**
