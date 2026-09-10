@@ -7,6 +7,9 @@ namespace Cosmira\Sandbox\Models;
 use Cosmira\Sandbox\Database\Factories\SandboxStatusFactory;
 use Cosmira\Sandbox\Enums\SandboxOperation;
 use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
+use Cosmira\Sandbox\Exceptions\SandboxException;
+use Cosmira\Sandbox\Support\SandboxStatusLocker;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -72,6 +75,48 @@ class SandboxStatus extends Model
     public function getTable(): string
     {
         return config('sandbox.table', 'sandbox_status');
+    }
+
+    public function getKeyName(): ?string
+    {
+        return config('sandbox.status_primary_key', $this->primaryKey);
+    }
+
+    /**
+     * Keyless tables are provisioned by the host, never inferred or repaired during editing.
+     *
+     * @param Builder<static>|null $query
+     */
+    public function singleton(?Builder $query = null): static
+    {
+        $rows = ($query ?? $this->newQuery())->get();
+        if ($rows->count() !== 1) {
+            throw new SandboxException('Sandbox status requires exactly one provisioned row.');
+        }
+
+        return $rows->first();
+    }
+
+    protected function setKeysForSaveQuery($query)
+    {
+        if ($this->getKeyName() !== null) {
+            return parent::setKeysForSaveQuery($query);
+        }
+
+        $this->singleton((new SandboxStatusLocker())->query($this));
+
+        return $query;
+    }
+
+    protected function setKeysForSelectQuery($query)
+    {
+        if ($this->getKeyName() !== null) {
+            return parent::setKeysForSelectQuery($query);
+        }
+
+        $this->singleton();
+
+        return $query;
     }
 
     /**

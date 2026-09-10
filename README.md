@@ -99,8 +99,14 @@ php artisan migrate
 ```
 
 Do not publish these migrations over an existing shared legacy status schema.
-Bind a `SandboxBackend` adapter for that schema instead; the default backend
-expects the package status model, including its primary key.
+For an existing status table without a primary key, set
+`sandbox.status_primary_key` to `null`. The default Eloquent backend then updates
+the single provisioned row under a transaction lock, retaining model casts and
+events. Missing or multiple rows fail before draft initialization; the package
+does not repair or seed an existing shared table. Provision that row during the
+host application's installation. Keyless model updates require a transaction;
+`status()`, `fresh()` and `refresh()` also reject an invalid singleton.
+The default remains the package's keyed status schema (`id`).
 
 Each sandboxed model needs an active table and a sandbox table. By default the
 sandbox table is the active table name plus `_sb`.

@@ -311,6 +311,10 @@ class EloquentSandboxBackend implements SandboxBackend
             SandboxException::class,
             'Sandbox status update was rejected.',
         );
+
+        if ($status->getKeyName() === null) {
+            $status->singleton();
+        }
     }
 
     /**
@@ -318,7 +322,11 @@ class EloquentSandboxBackend implements SandboxBackend
      */
     private function lockedStatus(): SandboxStatus
     {
-        return (new SandboxStatusLocker())->query($this->statusModel)->firstOrFail();
+        $query = (new SandboxStatusLocker())->query($this->statusModel);
+
+        return $this->statusModel->getKeyName() === null
+            ? $this->statusModel->singleton($query)
+            : $query->firstOrFail();
     }
 
     /**
@@ -326,6 +334,8 @@ class EloquentSandboxBackend implements SandboxBackend
      */
     public function status(): ?SandboxStatus
     {
-        return $this->statusModel->newQuery()->first();
+        return $this->statusModel->getKeyName() === null
+            ? $this->statusModel->singleton()
+            : $this->statusModel->newQuery()->first();
     }
 }

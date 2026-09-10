@@ -11,6 +11,9 @@ return [
     */
     'table' => env('SANDBOX_TABLE', 'sandbox_status'),
 
+    // Set to null for an existing keyless table containing exactly one provisioned row.
+    'status_primary_key' => 'id',
+
     /*
     |--------------------------------------------------------------------------
     | Schema prefix (optional)
