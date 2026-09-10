@@ -4,14 +4,33 @@ declare(strict_types=1);
 
 namespace Cosmira\Sandbox;
 
+use Cosmira\Sandbox\Relations\SandboxBelongsToMany;
 use Cosmira\Sandbox\Support\SandboxTableSynchronizer;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * Adds sandbox table switching and synchronization to an Eloquent model.
  */
 trait HasSandbox
 {
+    protected function newBelongsToMany(
+        Builder $query,
+        Model $parent,
+        mixed $table,
+        mixed $foreignPivotKey,
+        mixed $relatedPivotKey,
+        mixed $parentKey,
+        mixed $relatedKey,
+        mixed $relationName = null,
+    ): BelongsToMany {
+        return new SandboxBelongsToMany(
+            $query, $parent, $table, $foreignPivotKey, $relatedPivotKey,
+            $parentKey, $relatedKey, $relationName,
+        );
+    }
+
     /**
      * The suffix appended to active table names for sandbox tables.
      */
@@ -53,6 +72,8 @@ trait HasSandbox
 
     private ?string $sandboxResolvedTable = null;
 
+    private ?bool $sandboxResolvedDraft = null;
+
     /**
      * Get the active table name for the model.
      */
@@ -63,10 +84,20 @@ trait HasSandbox
 
     public function setTable($table): static
     {
-        $this->getActiveTable();
+        $this->sandboxResolvedDraft = match ($table) {
+            $this->getActiveTable()  => false,
+            $this->getSandboxTable() => true,
+            default                  => $this->isUsingSandboxTable(),
+        };
         $this->sandboxResolvedTable = $table;
 
         return $this;
+    }
+
+    /** Preserve the selected layer when Eloquent assigns a self-join alias. */
+    public function isUsingSandboxTable(): bool
+    {
+        return $this->sandboxResolvedDraft ?? static::$usesSandbox;
     }
 
     /**

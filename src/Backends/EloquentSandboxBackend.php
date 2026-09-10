@@ -169,6 +169,7 @@ class EloquentSandboxBackend implements SandboxBackend
 
     private function ensureRegisteredConnections(): void
     {
+        $this->models->ensureTableConnection($this->connection());
         foreach ($this->models->all() as $modelClass) {
             $this->ensureModelConnection(new $modelClass());
         }

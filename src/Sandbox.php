@@ -49,6 +49,12 @@ class Sandbox
         $this->models->register(...$models);
     }
 
+    /** Register tables without requiring application Pivot model classes. */
+    public function tables(SandboxTable ...$tables): void
+    {
+        $this->models->registerTables($this->connection(), ...$tables);
+    }
+
     private readonly SandboxBackend $backend;
 
     public function connection(): ConnectionInterface

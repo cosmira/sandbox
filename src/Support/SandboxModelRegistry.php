@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Cosmira\Sandbox\Support;
 
 use Cosmira\Sandbox\Exceptions\SandboxException;
+use Cosmira\Sandbox\SandboxTable;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Eloquent\Model;
+use InvalidArgumentException;
 
 /**
  * Stores sandbox models and applies their draft lifecycle operations.
@@ -19,6 +21,73 @@ class SandboxModelRegistry
      * @var array<int, class-string<Model>>
      */
     private array $models = [];
+
+    /** @var array<string, SandboxTable> */
+    private array $tables = [];
+
+    /** @var list<class-string<Model>|SandboxTable> */
+    private array $resources = [];
+
+    private ?ConnectionInterface $tableConnection = null;
+
+    public function registerTables(ConnectionInterface $connection, SandboxTable ...$tables): void
+    {
+        $this->ensureTableConnection($connection);
+        foreach ($tables as $table) {
+            foreach ($this->tables as $registered) {
+                if ($registered == $table) {
+                    continue 2;
+                }
+                if (array_intersect(
+                    [$registered->table, $registered->sandboxTable],
+                    [$table->table, $table->sandboxTable],
+                ) !== []) {
+                    throw new InvalidArgumentException('Conflicting sandbox table registration: '.$table->table);
+                }
+            }
+            foreach ($this->models as $model) {
+                $this->ensureSeparateTable($model, $table);
+            }
+            $this->tables[$table->table] = $table;
+            $this->resources[] = $table;
+            $this->tableConnection = $connection;
+        }
+    }
+
+    public function ensureTableConnection(ConnectionInterface $connection): void
+    {
+        throw_if(
+            $this->tableConnection !== null && $this->tableConnection !== $connection,
+            SandboxException::class,
+            'Registered tables must use the sandbox context connection.',
+            SandboxException::CODE_MODEL_NOT_REGISTERED,
+        );
+    }
+
+    /** Return null for a table outside the explicitly registered table set. */
+    public function resolveTable(string $name, ConnectionInterface $connection, bool $draft): ?string
+    {
+        foreach ($this->tables as $table) {
+            if ($name === $table->table || $name === $table->sandboxTable) {
+                $this->ensureTableConnection($connection);
+
+                return $draft ? $table->sandboxTable : $table->table;
+            }
+        }
+
+        return null;
+    }
+
+    private function ensureSeparateTable(string $model, SandboxTable $table): void
+    {
+        $instance = new $model();
+        if (method_exists($instance, 'getActiveTable') && array_intersect(
+            [$instance->getActiveTable(), $instance->getSandboxTable()],
+            [$table->table, $table->sandboxTable],
+        ) !== []) {
+            throw new InvalidArgumentException('A sandbox table is already represented by a model: '.$table->table);
+        }
+    }
 
     /**
      * The models switched to sandbox data for the current execution context.
@@ -40,6 +109,9 @@ class SandboxModelRegistry
         $this->contexts[] = [];
 
         try {
+            if ($this->connection !== null) {
+                $this->ensureTableConnection($this->connection);
+            }
             foreach (array_unique([...$this->all(), ...$this->switched]) as $model) {
                 $this->ensureConnection($model);
                 $this->rememberContext($model);
@@ -75,6 +147,13 @@ class SandboxModelRegistry
             $this->ensureCanUseSandboxTables($model);
             $this->ensureConnection($model);
             $this->ensureCanSync($model);
+
+            foreach ($this->tables as $table) {
+                $this->ensureSeparateTable($model, $table);
+            }
+            if (! in_array($model, $this->models, true)) {
+                $this->resources[] = $model;
+            }
 
             $this->remember($this->models, $model);
         }
@@ -128,8 +207,12 @@ class SandboxModelRegistry
      */
     public function resetSandbox(): void
     {
-        foreach ($this->all() as $model) {
-            $model::resetSandbox();
+        foreach ($this->resources as $resource) {
+            if ($resource instanceof SandboxTable) {
+                $resource->resetSandbox($this->tableConnection);
+            } else {
+                $resource::resetSandbox();
+            }
         }
     }
 
@@ -138,8 +221,12 @@ class SandboxModelRegistry
      */
     public function applySandbox(): void
     {
-        foreach ($this->all() as $model) {
-            $model::applySandbox();
+        foreach ($this->resources as $resource) {
+            if ($resource instanceof SandboxTable) {
+                $resource->applySandbox($this->tableConnection);
+            } else {
+                $resource::applySandbox();
+            }
         }
     }
 

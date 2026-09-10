@@ -417,6 +417,55 @@ Event::listen(SandboxResolvingModels::class, function (SandboxResolvingModels $e
 Do not register the same static model list in events. Use `Sandbox::models()`
 for that.
 
+### Pivot Tables Without Model Classes
+
+Use `Sandbox::tables()` for a configuration table that has no model behavior
+of its own. Supply its active name and the complete, non-null primary key:
+
+```php
+use Cosmira\Sandbox\SandboxTable;
+
+Sandbox::models(Person::class, Group::class);
+Sandbox::tables(
+    new SandboxTable('person_group', ['person_id', 'group_id']),
+);
+```
+
+The draft table defaults to `person_group_sb`. To use a different name, pass
+`sandboxTable: 'person_group_draft'`. Both tables must already exist. The
+package copies all columns through its existing table synchronizer; no
+`change_date` column is required. Registrations use the sandbox backend's
+connection. A conflicting definition or a table also registered through a
+model is rejected; repeating an identical definition is harmless.
+
+Keep standard Eloquent relationship definitions on models using `HasSandbox`:
+
+```php
+public function groups(): BelongsToMany
+{
+    return $this->belongsToMany(Group::class, 'person_group', 'person_id', 'group_id');
+}
+```
+
+`belongsToMany` resolves a registered pivot table before constructing joins
+and constraints. Reading, eager loading, existence queries, `attach()`,
+`updateExistingPivot()`, `sync()` and `detach()` use the parent's selected
+layer. A hydrated draft parent retains draft relationships after context
+exit; a hydrated active parent remains active inside a draft context. A
+related model using `HasSandbox` follows the same layer. Custom Pivot classes
+remain supported when they supply real behavior such as casts or events.
+Unregistered pivot tables are left unchanged.
+
+Registered tables participate in open, commit and rollback alongside models,
+in the order of registration across `models()` and `tables()` calls. This
+does not solve cyclic foreign-key dependencies. `save()` preserves the draft.
+Table registrations do not appear in the model registry's `all()` result.
+
+Automatic relationship switching currently covers `belongsToMany`, not
+polymorphic many-to-many relationships. Raw `DB::table()` calls and literal
+table-qualified column names are not rewritten. Individual `reset()` still
+accepts models; registered tables are reset by the complete sandbox lifecycle.
+
 ## Working With Models
 
 `HasSandbox` gives a model a table pair.
