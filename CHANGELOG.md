@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.1.0 - 2026-09-14
+
+Initial stable package release for Laravel 12 and 13.
+
+### Added
+
+- Registered tables and standard many-to-many relationships can use draft tables
+  without dedicated pivot model classes.
+- Self-referencing trees copy parents before children, including across chunks.
+- Selective reset rules preserve externally owned rows and columns.
+- Custom draft initialization and provisioned keyless status tables are supported.
+- Markdown validation and ShellCheck run in GitHub Actions.
+
+### Fixed
+
+- Models with timestamps disabled no longer require a `change_date` column.
+- Native database contract tests isolate temporary tables and secondary status
+  connections; PostgreSQL tree fixtures create primary keys before foreign keys.
+- Additional tests cover invalid copy definitions, registration conflicts,
+  duplicate synchronization, and cross-connection contexts.
+- README now provides a focused quick start with a separate detailed guide.
+
+### Compatibility
+
+- Requires PHP 8.2 or later and a compatible Laravel 12 or 13 release.
+- Supports SQLite, PostgreSQL, and MySQL through the Eloquent backend.
+- Oracle native integration and concurrent coroutine runtimes remain unsupported.
+- Host applications remain responsible for authorization and integration regression
+  testing before deployment. Package release does not validate a host rollout.
+
 ## 0.1.0-rc.1
 
 This is an integration prerelease, not authorization for production rollout.
