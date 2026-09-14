@@ -1,4 +1,4 @@
-name: typos
+name: shellcheck
 'on':
   push:
     branches:
@@ -6,15 +6,10 @@ name: typos
   pull_request:
     branches:
       - master
-concurrency:
-  group: typos-${{ github.ref }}
-  cancel-in-progress: true
 jobs:
-  typos:
+  shellcheck:
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: crate-ci/typos@v1.50.0
-        with:
-          config: ./.github/typos.toml
+      - uses: ludeeus/action-shellcheck@master
