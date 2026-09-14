@@ -51,6 +51,9 @@ final class PivotTableContractTest extends TestCase
     {
         TableMember::useActive();
         TableRole::useActive();
+        foreach (['membership_draft', 'table_memberships_sb', 'table_memberships', 'table_roles_sb', 'table_roles', 'table_members_sb', 'table_members'] as $table) {
+            Schema::dropIfExists($table);
+        }
         parent::tearDown();
     }
 

@@ -21,13 +21,21 @@ final class TreeTableContractTest extends TestCase
         parent::setUp();
         foreach (['tree_nodes', 'tree_nodes_sb'] as $name) {
             Schema::create($name, function (Blueprint $table) use ($name): void {
-                $table->integer('id')->primary();
+                $table->integer('id');
+                $table->primary('id');
                 $table->integer('parent_id')->nullable();
                 $table->string('name');
                 $table->foreign('parent_id')->references('id')->on($name)->cascadeOnDelete();
             });
         }
         app(Sandbox::class)->tables(new SandboxTable('tree_nodes', ['id'], parentColumn: 'parent_id'));
+    }
+
+    protected function tearDown(): void
+    {
+        Schema::dropIfExists('tree_nodes_sb');
+        Schema::dropIfExists('tree_nodes');
+        parent::tearDown();
     }
 
     #[Test]

@@ -22,6 +22,8 @@ final class SandboxTableTest extends TestCase
 
     public static function invalidDefinitions(): iterable
     {
+        yield 'blank table' => ['  ', ['id'], null];
+        yield 'blank key' => ['links', ['  '], null];
         yield 'empty table' => ['', ['id'], null];
         yield 'empty draft' => ['links', ['id'], ' '];
         yield 'same table' => ['links', ['id'], 'links'];
@@ -42,6 +44,7 @@ final class SandboxTableTest extends TestCase
 
     public static function invalidTrees(): iterable
     {
+        yield 'blank parent' => [['id'], '  '];
         yield 'empty parent' => [['id'], ''];
         yield 'composite key' => [['id', 'type'], 'parent_id'];
         yield 'same key and parent' => [['id'], 'id'];

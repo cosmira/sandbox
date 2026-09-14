@@ -196,8 +196,12 @@ final class KeylessStatusContractTest extends TestCase
     #[Test]
     public function injectedStatusModelUsesItsOwnConnection(): void
     {
-        config(['database.connections.secondary' => config('database.connections.testing')]);
+        config(['database.connections.secondary' => [
+            ...config('database.connections.testing'),
+            'prefix' => 'secondary_',
+        ]]);
         $connection = DB::connection('secondary');
+        $this->beforeApplicationDestroyed(fn () => $connection->getSchemaBuilder()->dropIfExists('keyless_status'));
         $connection->getSchemaBuilder()->create('keyless_status', function (Blueprint $table): void {
             $table->integer('status');
             $table->integer('user_id');

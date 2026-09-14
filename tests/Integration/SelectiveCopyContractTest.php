@@ -33,6 +33,34 @@ final class SelectiveCopyContractTest extends TestCase
         }
     }
 
+    protected function tearDown(): void
+    {
+        Schema::dropIfExists('copy_items_sb');
+        Schema::dropIfExists('copy_items');
+        parent::tearDown();
+    }
+
+    #[Test]
+    public function duplicateRegistrationDoesNotRepeatSynchronizationWrites(): void
+    {
+        foreach (['copy_items', 'copy_items_sb'] as $name) {
+            DB::table($name)->insert(['id' => 1, 'source' => 'local', 'name' => 'Original', 'external_value' => 'Value']);
+        }
+        $registry = new SandboxModelRegistry();
+        $table = new SandboxTable('copy_items', ['id']);
+        $registry->registerTables(DB::connection(), $table, $table);
+        DB::connection()->enableQueryLog();
+        DB::connection()->flushQueryLog();
+
+        try {
+            $registry->resetSandbox();
+            $updates = array_filter(DB::connection()->getQueryLog(), fn (array $query) => str_starts_with(strtolower($query['query']), 'update '));
+            $this->assertCount(1, $updates, 'Duplicate registration must not repeat update side effects.');
+        } finally {
+            DB::connection()->disableQueryLog();
+        }
+    }
+
     #[Test]
     public function hostRulesPreserveExternallyOwnedRowsAndColumns(): void
     {
