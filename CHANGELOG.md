@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 - 2026-09-16
 
 ### Changed
 
@@ -15,7 +15,22 @@
 
 ### Added
 
-- PHPStan runs locally through `composer test:types` and in GitHub Actions.
+- PHPStan and Rector run locally through `composer test:types` and
+  `composer test:rector`, and in GitHub Actions.
+- Soda checks standard quality rules and multiline PHPDoc for methods, properties,
+  and constants, including constructor-promoted properties.
+- Dedicated mutation testing and coverage workflows retain the 96% MSI and
+  covered MSI thresholds and the 80% statement coverage threshold.
+- CI covers PHP 8.2–8.5 with compatible Laravel 12/13 combinations, Windows
+  concurrency checks, and native PostgreSQL/MySQL contracts.
+- Pint automatically commits formatting fixes on pushes and checks pull requests.
+
+### Compatibility
+
+- Existing 0.1.0 integrations retain their public API, including trait-only models,
+  `me()`, `for()`, optional dependencies, and boolean `force` arguments.
+- Requires PHP 8.2 or later and a compatible Laravel 12 or 13 release.
+- No database migration is required for this release.
 
 ## 0.1.0 - 2026-09-14
 

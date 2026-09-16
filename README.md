@@ -23,7 +23,7 @@ See [upgrading from 0.1.0](docs/upgrading.md) when updating an existing integrat
 ## Installation
 
 ```bash
-composer require cosmira/sandbox:^0.1
+composer require cosmira/sandbox:^1.0
 php artisan vendor:publish --tag=sandbox-migrations
 php artisan migrate
 ```
