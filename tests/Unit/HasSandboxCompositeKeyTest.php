@@ -151,11 +151,17 @@ class PivotModelStub extends Model
 {
     use HasSandbox;
 
+    public function getSandboxPrimaryKey(): array
+    {
+        return ['a', 'b'];
+    }
+
+    protected static function getSandboxTrackChangeColumn(): ?string
+    {
+        return null;
+    }
+
     protected $table = 'test_pivot';
 
-    public static function setCompositeKey(): void
-    {
-        self::$sandboxPrimaryKey = ['a', 'b'];
-        self::$sandboxTrackChangeColumn = null;
-    }
+    public static function setCompositeKey(): void {}
 }

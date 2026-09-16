@@ -854,6 +854,9 @@ final class SyncOperationsTest extends TestCase
             keyColumns: ['id'],
             columns: [],
             changeColumn: null,
+            sourceAlias: 'source',
+            targetAlias: 'target',
+            parentColumn: null,
         );
 
         $row = DB::table('items_sb')->where('id', 10)->first();
@@ -873,6 +876,8 @@ final class SyncOperationsTest extends TestCase
 
         $connection = \Mockery::mock(DB::connection());
         $connection->shouldReceive('getSchemaBuilder')->once()->andReturn($schema);
+        $connection->shouldNotReceive('transaction');
+        $connection->shouldNotReceive('table');
         $synchronizer = new SandboxTableSynchronizer($connection);
 
         $synchronizer->sync(
@@ -881,6 +886,9 @@ final class SyncOperationsTest extends TestCase
             keyColumns: ['id'],
             columns: [],
             changeColumn: null,
+            sourceAlias: 'source',
+            targetAlias: 'target',
+            parentColumn: null,
         );
 
         $this->assertSame(0, DB::table('items_sb')->count());
@@ -912,6 +920,9 @@ final class SyncOperationsTest extends TestCase
             keyColumns: ['id'],
             columns: ['id', 'name', 'value', 'created_at', 'updated_at'],
             changeColumn: null,
+            sourceAlias: 'source',
+            targetAlias: 'target',
+            parentColumn: null,
         );
 
         $this->assertSame(501, DB::table('items_sb')->count());
@@ -968,8 +979,6 @@ class SimpleModelStub extends Model
 
 class NoTrackedColumnModelStub extends SimpleModelStub
 {
-    protected static ?string $sandboxTrackChangeColumn = 'updated_at';
-
     protected static function getSandboxTrackChangeColumn(): ?string
     {
         return null;
@@ -1056,7 +1065,10 @@ class TimestampedModelStub extends TimestampFreeModelStub
 
 class CustomTrackingModelStub extends TimestampFreeModelStub
 {
-    protected static ?string $sandboxTrackChangeColumn = 'revision';
+    protected static function getSandboxTrackChangeColumn(): ?string
+    {
+        return 'revision';
+    }
 }
 
 class ExplicitTrackingModelStub extends TimestampFreeModelStub

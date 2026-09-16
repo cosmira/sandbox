@@ -232,7 +232,7 @@ final class PivotTableContractTest extends TestCase
         Schema::rename('table_memberships_sb', 'membership_draft');
         $sandbox = app(Sandbox::class);
         $sandbox->models(TableMember::class, TableRole::class);
-        $definition = new SandboxTable('table_memberships', ['member_id', 'role_id'], 'membership_draft');
+        $definition = new SandboxTable('table_memberships', ['member_id', 'role_id'], sandboxTable: 'membership_draft' ?? 'table_memberships'.'_sb');
         $sandbox->tables($definition, clone $definition);
         $owner = $this->createUser();
         $sandbox->edit($owner, function (): void {

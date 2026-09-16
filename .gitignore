@@ -10,3 +10,4 @@ infection.log
 infection-summary.log
 infection-results.json
 infection-per-mutator.log
+/.phpstan.cache/

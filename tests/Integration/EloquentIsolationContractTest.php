@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cosmira\Sandbox\Tests\Integration;
 
+use Cosmira\Sandbox\Eloquent\Context;
 use Cosmira\Sandbox\HasSandbox;
 use Cosmira\Sandbox\Tests\TestCase;
 use Illuminate\Database\Eloquent\Model;
@@ -41,6 +42,19 @@ final class EloquentIsolationContractTest extends TestCase
         Schema::dropIfExists('isolation_items_sb');
         Schema::dropIfExists('isolation_items');
         parent::tearDown();
+    }
+
+    #[Test]
+    public function aFreshApplicationScopeStartsWithActiveTables(): void
+    {
+        IsolationItem::useSandbox();
+        $this->assertTrue(IsolationItem::isUsingSandbox());
+
+        $this->app->forgetScopedInstances();
+        Context::clearResolvedInstances();
+
+        $this->assertFalse(IsolationItem::isUsingSandbox());
+        $this->assertSame('active', IsolationItem::query()->value('name'));
     }
 
     #[Test]

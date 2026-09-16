@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cosmira\Sandbox\Tests\Unit;
 
 use Cosmira\Sandbox\Exceptions\SandboxException;
+use Cosmira\Sandbox\HasSandbox;
 use Cosmira\Sandbox\Support\SandboxModelRegistry;
 use Cosmira\Sandbox\Tests\TestCase;
 use Illuminate\Database\Eloquent\Model;
@@ -142,6 +143,8 @@ final class SandboxModelRegistryTest extends TestCase
 
 class RegistrySandboxModelStub extends Model
 {
+    use HasSandbox;
+
     public static bool $usingSandboxTable = false;
 
     public static int $resetSandboxCalls = 0;

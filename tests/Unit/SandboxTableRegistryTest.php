@@ -10,7 +10,7 @@ use Cosmira\Sandbox\HasSandbox;
 use Cosmira\Sandbox\SandboxTable;
 use Cosmira\Sandbox\Support\SandboxModelRegistry;
 use Cosmira\Sandbox\Tests\TestCase;
-use Illuminate\Database\ConnectionInterface;
+use Illuminate\Database\Connection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -24,7 +24,11 @@ final class SandboxTableRegistryTest extends TestCase
     {
         $registry = new SandboxModelRegistry();
         $connection = DB::connection();
-        $registry->registerTables($connection, new SandboxTable('first', ['id']), new SandboxTable('second', ['id']));
+        $registry->registerTables(
+            $connection,
+            new SandboxTable('first', ['id']),
+            new SandboxTable('second', ['id']),
+        );
         foreach (['first', 'second'] as $name) {
             $this->assertSame($name.'_sb', $registry->resolveTable($name, $connection, true));
             $this->assertSame($name, $registry->resolveTable($name.'_sb', $connection, false));
@@ -37,10 +41,16 @@ final class SandboxTableRegistryTest extends TestCase
     public function overlappingNamesReportTheConflictingTable(string $active, string $draft): void
     {
         $registry = new SandboxModelRegistry();
-        $registry->registerTables(DB::connection(), new SandboxTable('first', ['id']));
+        $registry->registerTables(
+            DB::connection(),
+            new SandboxTable('first', ['id']),
+        );
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Conflicting sandbox table registration: '.$active);
-        $registry->registerTables(DB::connection(), new SandboxTable($active, ['id'], $draft));
+        $registry->registerTables(
+            DB::connection(),
+            new SandboxTable($active, ['id'], sandboxTable: $draft ?? $active.'_sb'),
+        );
     }
 
     public static function conflictingNames(): iterable
@@ -57,15 +67,33 @@ final class SandboxTableRegistryTest extends TestCase
     {
         $registry = new SandboxModelRegistry();
         $connection = DB::connection();
-        $other = $this->createStub(ConnectionInterface::class);
-        $registry->registerTables($connection, new SandboxTable('first', ['id']));
+        $other = $this->createStub(Connection::class);
+        $registry->registerTables(
+            $connection,
+            new SandboxTable('first', ['id']),
+        );
         $this->expectException(SandboxException::class);
         $this->expectExceptionMessage('Registered tables must use the sandbox context connection.');
         match ($operation) {
-            'register' => $registry->registerTables($other, new SandboxTable('second', ['id'])),
+            'register' => $registry->registerTables(
+                $other,
+                new SandboxTable('second', ['id']),
+            ),
             'resolve'  => $registry->resolveTable('first', $other, true),
-            'context'  => $registry->usingTables(true, fn () => $this->fail('Wrong connection accepted.'), $other),
-            'nested'   => $registry->usingTables(true, fn () => $registry->usingTables(false, fn () => $this->fail('Wrong nested connection accepted.'), $other), $connection),
+            'context'  => $registry->usingTables(
+                true,
+                fn () => $this->fail('Wrong connection accepted.'),
+                $other,
+            ),
+            'nested'   => $registry->usingTables(
+                true,
+                fn () => $registry->usingTables(
+                    false,
+                    fn () => $this->fail('Wrong nested connection accepted.'),
+                    $other,
+                ),
+                $connection,
+            ),
         };
     }
 
@@ -80,7 +108,10 @@ final class SandboxTableRegistryTest extends TestCase
     public function backendRejectsTablesFromAnotherConnectionBeforeOpening(): void
     {
         $registry = new SandboxModelRegistry();
-        $registry->registerTables($this->createStub(ConnectionInterface::class), new SandboxTable('first', ['id']));
+        $registry->registerTables(
+            $this->createStub(Connection::class),
+            new SandboxTable('first', ['id']),
+        );
         $this->expectException(SandboxException::class);
         $this->expectExceptionMessage('Registered tables must use the sandbox context connection.');
         (new EloquentSandboxBackend($registry))->open(1);
@@ -91,7 +122,7 @@ final class SandboxTableRegistryTest extends TestCase
     public function modelsAndTablesCannotShareOnlyTheirActiveName(bool $modelFirst): void
     {
         $registry = new SandboxModelRegistry();
-        $table = new SandboxTable('registry_items', ['id'], 'different_draft');
+        $table = new SandboxTable('registry_items', ['id'], sandboxTable: 'different_draft' ?? 'registry_items'.'_sb');
         if ($modelFirst) {
             $registry->register(RegistryTableModel::class);
         } else {
@@ -121,7 +152,7 @@ final class SandboxTableRegistryTest extends TestCase
                 $this->fail('Model entered a context on another connection.');
             }
             $registry->register(RegistryTableModel::class);
-        }, $this->createStub(ConnectionInterface::class));
+        }, $this->createStub(Connection::class));
     }
 
     public static function registrationOrders(): iterable

@@ -35,7 +35,7 @@ class OpenSandboxCommand extends Command
         $userId = $this->argument('userId');
 
         if (! $userId) {
-            $user = auth()->user();
+            $user = auth()->guard()->user();
             if (! $user) {
                 $this->error('No user specified and no authenticated user found');
 
@@ -52,8 +52,8 @@ class OpenSandboxCommand extends Command
             $this->info("Sandbox opened for user: {$userId}");
 
             return self::SUCCESS;
-        } catch (SandboxException $e) {
-            $this->error("Failed to open sandbox: {$e->getMessage()}");
+        } catch (SandboxException $exception) {
+            $this->error("Failed to open sandbox: {$exception->getMessage()}");
 
             return self::FAILURE;
         }

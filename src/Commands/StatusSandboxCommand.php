@@ -39,9 +39,11 @@ class StatusSandboxCommand extends Command
 
         if ($status->isFree()) {
             $this->info('Sandbox is FREE (not in use)');
-        } elseif ($status->isLocked()) {
+        }
+        if ($status->isLocked()) {
             $this->info("Sandbox is LOCKED by user: {$status->user_id}");
-        } elseif ($status->isSaved()) {
+        }
+        if ($status->isSaved()) {
             $this->info("Sandbox is SAVED (user: {$status->user_id})");
         }
 

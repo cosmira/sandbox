@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/**'
       - 'phpunit.xml'
+      - 'phpstan.neon'
       - 'composer.json'
       - 'composer.lock'
       - '.prettierrc'
@@ -41,3 +42,6 @@ jobs:
 
       - name: Run Pint
         run: vendor/bin/pint --test
+
+      - name: Run PHPStan
+        run: composer test:types

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Cosmira\Sandbox\Support;
 
+use Cosmira\Sandbox\Eloquent\SelectionScope;
 use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\SandboxTable;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Eloquent\Model;
-use InvalidArgumentException;
 
 /**
  * Stores sandbox models and applies their draft lifecycle operations.
@@ -18,7 +18,7 @@ class SandboxModelRegistry
     /**
      * The models that belong to the sandbox workflow.
      *
-     * @var array<int, class-string<Model>>
+     * @var list<class-string<Model>>
      */
     private array $models = [];
 
@@ -30,6 +30,11 @@ class SandboxModelRegistry
 
     private ?ConnectionInterface $tableConnection = null;
 
+    public function __construct()
+    {
+        $this->scope = new SelectionScope();
+    }
+
     public function registerTables(ConnectionInterface $connection, SandboxTable ...$tables): void
     {
         $this->ensureTableConnection($connection);
@@ -38,12 +43,7 @@ class SandboxModelRegistry
                 if ($registered == $table) {
                     continue 2;
                 }
-                if (array_intersect(
-                    [$registered->table, $registered->sandboxTable],
-                    [$table->table, $table->sandboxTable],
-                ) !== []) {
-                    throw new InvalidArgumentException('Conflicting sandbox table registration: '.$table->table);
-                }
+                $table->ensureSeparate($registered);
             }
             foreach ($this->models as $model) {
                 $this->ensureSeparateTable($model, $table);
@@ -65,8 +65,11 @@ class SandboxModelRegistry
     }
 
     /** Return null for a table outside the explicitly registered table set. */
-    public function resolveTable(string $name, ConnectionInterface $connection, bool $draft): ?string
-    {
+    public function resolveTable(
+        string $name,
+        ConnectionInterface $connection,
+        bool $draft,
+    ): ?string {
         foreach ($this->tables as $table) {
             if ($name === $table->table || $name === $table->sandboxTable) {
                 $this->ensureTableConnection($connection);
@@ -78,157 +81,17 @@ class SandboxModelRegistry
         return null;
     }
 
-    private function ensureSeparateTable(string $model, SandboxTable $table): void
-    {
-        $instance = new $model();
-        if (method_exists($instance, 'getActiveTable') && array_intersect(
-            [$instance->getActiveTable(), $instance->getSandboxTable()],
-            [$table->table, $table->sandboxTable],
-        ) !== []) {
-            throw new InvalidArgumentException('A sandbox table is already represented by a model: '.$table->table);
-        }
-    }
-
-    /**
-     * The models switched to sandbox data for the current execution context.
-     *
-     * @var array<int, class-string<Model>>
-     */
-    private array $switched = [];
-
-    /** @var list<array<class-string<Model>, bool>> */
-    private array $contexts = [];
-
-    private ?ConnectionInterface $connection = null;
-
-    public function usingTables(bool $draft, callable $callback, ?ConnectionInterface $connection = null): mixed
-    {
-        $previousSwitched = $this->switched;
-        $previousConnection = $this->connection;
-        $this->connection = $connection ?? $previousConnection;
-        $this->contexts[] = [];
-
-        try {
-            if ($this->connection !== null) {
-                $this->ensureTableConnection($this->connection);
-            }
-            foreach (array_unique([...$this->all(), ...$this->switched]) as $model) {
-                $this->ensureConnection($model);
-                $this->rememberContext($model);
-                $draft ? $model::useSandbox() : $model::useActive();
-            }
-
-            return $callback();
-        } finally {
-            foreach (array_pop($this->contexts) as $model => $previous) {
-                $previous ? $model::useSandbox() : $model::useActive();
-            }
-            $this->switched = $previousSwitched;
-            $this->connection = $previousConnection;
-        }
-    }
-
-    private function rememberContext(string $model): void
-    {
-        $index = array_key_last($this->contexts);
-        if ($index !== null && ! array_key_exists($model, $this->contexts[$index])) {
-            $this->contexts[$index][$model] = $model::isUsingSandbox();
-        }
-    }
-
-    /**
-     * Register models that should participate in the sandbox workflow.
-     *
-     * @param class-string<Model> ...$models
-     */
-    public function register(string ...$models): void
-    {
-        foreach ($models as $model) {
-            $this->ensureCanUseSandboxTables($model);
-            $this->ensureConnection($model);
-            $this->ensureCanSync($model);
-
-            foreach ($this->tables as $table) {
-                $this->ensureSeparateTable($model, $table);
-            }
-            if (! in_array($model, $this->models, true)) {
-                $this->resources[] = $model;
-            }
-
-            $this->remember($this->models, $model);
-        }
-    }
-
     /**
      * Get the registered sandbox models.
      *
-     * @return array<int, class-string<Model>>
+     * @return list<class-string<Model>>
      */
     public function all(): array
     {
         return $this->models;
     }
 
-    /**
-     * Switch registered or given models to sandbox data.
-     *
-     * @param class-string<Model> ...$models
-     */
-    public function useSandbox(string ...$models): void
-    {
-        $models = $models === [] ? $this->all() : $models;
-
-        foreach ($models as $model) {
-            $this->ensureCanUseSandboxTables($model);
-            $this->ensureConnection($model);
-
-            $this->rememberContext($model);
-            $this->remember($this->switched, $model);
-            $model::useSandbox();
-        }
-    }
-
-    /**
-     * Restore all switched models to active tables.
-     */
-    public function restoreActiveTables(): void
-    {
-        foreach ($this->switched as $model) {
-            if ($this->canUseSandboxTables($model)) {
-                $model::useActive();
-            }
-        }
-
-        $this->switched = [];
-    }
-
-    /**
-     * Reset registered sandbox tables from active tables.
-     */
-    public function resetSandbox(): void
-    {
-        foreach ($this->resources as $resource) {
-            if ($resource instanceof SandboxTable) {
-                $resource->resetSandbox($this->tableConnection);
-            } else {
-                $resource::resetSandbox();
-            }
-        }
-    }
-
-    /**
-     * Apply registered sandbox tables to active tables.
-     */
-    public function applySandbox(): void
-    {
-        foreach ($this->resources as $resource) {
-            if ($resource instanceof SandboxTable) {
-                $resource->applySandbox($this->tableConnection);
-            } else {
-                $resource::applySandbox();
-            }
-        }
-    }
+    private readonly SelectionScope $scope;
 
     /**
      * Ensure the model can be switched between active and sandbox tables.
@@ -243,6 +106,23 @@ class SandboxModelRegistry
             $this->canUseSandboxTables($model),
             SandboxException::class,
             sprintf('Model %s must use HasSandbox trait.', $model),
+            SandboxException::CODE_MODEL_NOT_REGISTERED,
+        );
+    }
+
+    private function ensureConnection(string $model): void
+    {
+        if ($this->scope->connection === null) {
+            return;
+        }
+
+        throw_unless(
+            is_subclass_of(
+                $model,
+                Model::class,
+            ) && (new $model())->getConnection() === $this->scope->connection,
+            SandboxException::class,
+            sprintf('Model %s must use the sandbox context connection.', $model),
             SandboxException::CODE_MODEL_NOT_REGISTERED,
         );
     }
@@ -271,6 +151,121 @@ class SandboxModelRegistry
         );
     }
 
+    private function ensureSeparateTable(string $model, SandboxTable $table): void
+    {
+        $instance = new $model();
+        if (! method_exists($instance, 'getActiveTable')
+            || ! method_exists($instance, 'getSandboxTable')) {
+            return;
+        }
+        $table->ensureSeparateModel($instance->getActiveTable(), $instance->getSandboxTable());
+    }
+
+    public function usingTables(
+        bool $draft,
+        callable $callback,
+        ?ConnectionInterface $connection = null,
+    ): mixed {
+        return $this->scope->run($connection, function () use ($draft, $callback): mixed {
+            if ($this->scope->connection !== null) {
+                $this->ensureTableConnection($this->scope->connection);
+            }
+            foreach (array_unique([...$this->all(), ...$this->scope->switched]) as $model) {
+                $this->ensureConnection($model);
+                $this->scope->remember($model);
+                $draft ? $model::useSandbox() : $model::useActive();
+            }
+
+            return $callback();
+        });
+    }
+
+    /**
+     * Register models that should participate in the sandbox workflow.
+     *
+     * @param class-string<Model> ...$models
+     */
+    public function register(string ...$models): void
+    {
+        foreach ($models as $model) {
+            $this->ensureConnection($model);
+            $this->ensureCanUseSandboxTables($model);
+            $this->ensureCanSync($model);
+
+            foreach ($this->tables as $table) {
+                $this->ensureSeparateTable($model, $table);
+            }
+            if (! in_array($model, $this->models, true)) {
+                $this->resources[] = $model;
+            }
+
+            $this->remember($this->models, $model);
+        }
+    }
+
+    /**
+     * Switch registered or given models to sandbox data.
+     *
+     * @param class-string<Model> ...$models
+     */
+    public function useSandbox(string ...$models): void
+    {
+        $models = $models === [] ? $this->all() : $models;
+
+        foreach ($models as $model) {
+            $this->ensureCanUseSandboxTables($model);
+            $this->ensureConnection($model);
+
+            $this->scope->remember($model);
+            $this->remember($this->scope->switched, $model);
+            $model::useSandbox();
+        }
+    }
+
+    /**
+     * Restore all switched models to active tables.
+     */
+    public function restoreActiveTables(): void
+    {
+        foreach ($this->scope->switched as $model) {
+            if ($this->canUseSandboxTables($model)) {
+                $model::useActive();
+            }
+        }
+
+        $this->scope->switched = [];
+    }
+
+    /**
+     * Reset registered sandbox tables from active tables.
+     */
+    public function resetSandbox(): void
+    {
+        foreach ($this->resources as $resource) {
+            if ($resource instanceof SandboxTable) {
+                $resource->resetSandbox($this->tableConnection);
+
+                continue;
+            }
+            $resource::resetSandbox();
+        }
+    }
+
+    /**
+     * Apply registered sandbox tables to active tables.
+     */
+    public function applySandbox(): void
+    {
+        foreach ($this->resources as $resource) {
+            if ($resource instanceof SandboxTable) {
+                $resource->applySandbox($this->tableConnection);
+
+                continue;
+            }
+            $resource::applySandbox();
+        }
+    }
+
     /**
      * Determine if the model exposes the sandbox table API.
      *
@@ -287,8 +282,10 @@ class SandboxModelRegistry
     /**
      * Remember a model once while preserving registration order.
      *
-     * @param array<int, class-string<Model>> $models
-     * @param class-string<Model>             $model
+     * @template TModel of Model
+     *
+     * @param list<class-string<TModel>> $models
+     * @param class-string<TModel>       $model
      */
     private function remember(array &$models, string $model): void
     {
@@ -297,16 +294,20 @@ class SandboxModelRegistry
         }
     }
 
-    private function ensureConnection(string $model): void
+    public function ensureAllConnections(ConnectionInterface $connection): void
     {
-        if ($this->connection === null) {
-            return;
+        $this->ensureTableConnection($connection);
+        foreach ($this->all() as $modelClass) {
+            $this->ensureModelConnection(new $modelClass(), $connection);
         }
+    }
 
+    public function ensureModelConnection(Model $model, ConnectionInterface $connection): void
+    {
         throw_unless(
-            is_subclass_of($model, Model::class) && (new $model())->getConnection() === $this->connection,
+            $model->getConnection() === $connection,
             SandboxException::class,
-            sprintf('Model %s must use the sandbox context connection.', $model),
+            sprintf('Model %s must use the sandbox status connection.', $model::class),
             SandboxException::CODE_MODEL_NOT_REGISTERED,
         );
     }

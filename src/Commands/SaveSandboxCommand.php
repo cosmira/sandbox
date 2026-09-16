@@ -43,8 +43,8 @@ class SaveSandboxCommand extends Command
             $this->info('Sandbox saved');
 
             return self::SUCCESS;
-        } catch (SandboxException $e) {
-            $this->error("Failed to save sandbox: {$e->getMessage()}");
+        } catch (SandboxException $exception) {
+            $this->error("Failed to save sandbox: {$exception->getMessage()}");
 
             return self::FAILURE;
         }
@@ -61,7 +61,7 @@ class SaveSandboxCommand extends Command
             return $userId;
         }
 
-        $user = auth()->user();
+        $user = auth()->guard()->user();
         if (! $user) {
             $this->error('No user specified and no authenticated user found');
 

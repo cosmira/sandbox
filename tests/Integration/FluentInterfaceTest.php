@@ -229,6 +229,8 @@ final class FluentInterfaceTest extends TestCase
 
 class BuilderResetModelStub extends Model
 {
+    public static function applySandbox(): void {}
+
     public static int $synced = 0;
 
     public static function resetSandbox(): void

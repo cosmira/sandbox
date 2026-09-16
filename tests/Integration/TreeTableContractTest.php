@@ -110,9 +110,7 @@ final class TreeTableContractTest extends TestCase
         DB::table('tree_nodes_sb')->insert(['id' => 1, 'parent_id' => 3, 'name' => 'Retained label']);
         DB::table('tree_nodes')->insert(['id' => 2, 'parent_id' => null, 'name' => 'New parent']);
         DB::table('tree_nodes')->insert(['id' => 1, 'parent_id' => 2, 'name' => 'Active label']);
-        $table = new SandboxTable('tree_nodes', ['id'], parentColumn: 'parent_id', reset: new SandboxCopyRules(
-            updateColumns: ['parent_id'],
-        ));
+        $table = new SandboxTable('tree_nodes', ['id'], parentColumn: 'parent_id', reset: new SandboxCopyRules(updateColumns: ['parent_id']));
         $table->resetSandbox(DB::connection());
         $this->assertSame([1, 2], DB::table('tree_nodes_sb')->orderBy('id')->pluck('id')->all());
         $this->assertSame('Retained label', DB::table('tree_nodes_sb')->where('id', 1)->value('name'));

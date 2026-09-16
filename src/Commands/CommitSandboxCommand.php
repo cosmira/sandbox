@@ -46,8 +46,8 @@ class CommitSandboxCommand extends Command
             $this->info('Sandbox committed');
 
             return self::SUCCESS;
-        } catch (SandboxException $e) {
-            $this->error("Failed to commit sandbox: {$e->getMessage()}");
+        } catch (SandboxException $exception) {
+            $this->error("Failed to commit sandbox: {$exception->getMessage()}");
 
             return self::FAILURE;
         }
@@ -64,7 +64,7 @@ class CommitSandboxCommand extends Command
             return $userId;
         }
 
-        $user = auth()->user();
+        $user = auth()->guard()->user();
         if (! $user) {
             $this->error('No user specified and no authenticated user found');
 

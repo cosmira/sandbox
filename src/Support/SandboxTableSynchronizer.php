@@ -47,7 +47,9 @@ class SandboxTableSynchronizer
         ?SandboxCopyRules $rules = null,
     ): void {
         if ($keyColumns === []) {
-            throw new InvalidArgumentException('Sandbox synchronization requires at least one key column.');
+            throw new InvalidArgumentException(
+                'Sandbox synchronization requires at least one key column.',
+            );
         }
         $columns = $columns ?: $this->columnsFrom($sourceTable);
         if ($columns === []) {
@@ -57,20 +59,25 @@ class SandboxTableSynchronizer
             $this->ensureChangeColumn($sourceTable, $columns, $changeColumn);
         }
         $columns = array_values(array_unique([...$keyColumns, ...$columns]));
-        $updateColumns = $rules?->updateColumns ?? $columns;
+        $updateColumns = $rules->updateColumns ?? $columns;
         if (array_diff($updateColumns, $columns) !== []) {
-            throw new InvalidArgumentException('Sandbox update columns must exist in the copied table.');
+            throw new InvalidArgumentException(
+                'Sandbox update columns must exist in the copied table.',
+            );
         }
 
         $this->connection->transaction(function () use (
-            $sourceTable, $targetTable, $keyColumns, $columns, $targetAlias, $sourceAlias, $parentColumn,
+            $sourceTable, $targetTable, $keyColumns, $columns,
+            $targetAlias, $sourceAlias, $parentColumn,
             $rules, $updateColumns,
         ): void {
             if ($parentColumn === null) {
                 $this->deleteMissing($targetTable, $sourceTable, $keyColumns, $rules);
             }
             if ($parentColumn !== null) {
-                $this->insertTreeMissing($targetTable, $sourceTable, $keyColumns, $columns, $parentColumn, $rules);
+                $this->insertTreeMissing(
+                    $targetTable, $sourceTable, $keyColumns, $columns, $parentColumn, $rules,
+                );
             }
             if ($updateColumns !== []) {
                 $this->updateExisting(
@@ -81,9 +88,10 @@ class SandboxTableSynchronizer
             }
             if ($parentColumn === null) {
                 $this->insertMissing($targetTable, $sourceTable, $keyColumns, $columns, $rules);
-            } else {
-                $this->deleteMissing($targetTable, $sourceTable, $keyColumns, $rules);
+
+                return;
             }
+            $this->deleteMissing($targetTable, $sourceTable, $keyColumns, $rules);
         });
     }
 
@@ -102,7 +110,9 @@ class SandboxTableSynchronizer
         ?SandboxCopyRules $rules,
     ): void {
         if (count($keyColumns) !== 1 || ! in_array($parentColumn, $columns, true)) {
-            throw new InvalidArgumentException('Sandbox tree synchronization requires one key and a selected parent column.');
+            throw new InvalidArgumentException(
+                'Sandbox tree synchronization requires one key and a selected parent column.',
+            );
         }
 
         $missing = $this->connection->table($sourceTable)
@@ -121,11 +131,16 @@ class SandboxTableSynchronizer
                     ->orWhereColumn($sourceTable.'.'.$parentColumn, $sourceTable.'.'.$keyColumns[0])
                     ->orWhereExists(fn (QueryBuilder $parent) => $parent
                         ->select($targetTable.'.'.$keyColumns[0])->from($targetTable)
-                        ->whereColumn($targetTable.'.'.$keyColumns[0], $sourceTable.'.'.$parentColumn));
+                        ->whereColumn(
+                            $targetTable.'.'.$keyColumns[0], $sourceTable.'.'.$parentColumn,
+                        ));
             })->select($columns);
 
-            if ($this->insertChunked($targetTable, $ready->cursor()) === 0) {
-                throw new SandboxException('Sandbox tree contains an unresolved parent or a cycle.');
+            $inserted = $this->insertChunked($targetTable, $ready->cursor());
+            if ($inserted === 0) {
+                throw new SandboxException(
+                    'Sandbox tree contains an unresolved parent or a cycle.',
+                );
             }
         }
     }

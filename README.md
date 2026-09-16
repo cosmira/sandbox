@@ -18,6 +18,8 @@ shared configuration.
 - SQLite, PostgreSQL, or MySQL.
 - An active table and a matching draft table for each registered model or table.
 
+See [upgrading from 0.1.0](docs/upgrading.md) when updating an existing integration.
+
 ## Installation
 
 ```bash
@@ -134,7 +136,8 @@ requires at least 96% MSI and covered MSI.
 ## Limitations
 
 - One global configuration session per application.
-- Model table switching is static; concurrent coroutine runtimes are unsupported.
+- Model table selection belongs to the application context; concurrent coroutine
+  runtimes sharing that context are unsupported.
 - Hydrated models retain their selected table after a context ends. Do not carry
   draft models across authorization boundaries.
 - Raw SQL and `DB::table()` calls do not switch tables automatically.

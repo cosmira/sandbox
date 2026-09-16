@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cosmira\Sandbox;
 
+use Cosmira\Sandbox\Models\SandboxStatus;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -11,21 +12,14 @@ use Illuminate\Database\Eloquent\Model;
  */
 class SandboxBuilder
 {
-    /**
-     * The sandbox service instance.
-     */
-    private readonly Sandbox $sandbox;
-
-    /**
-     * Create a new user-scoped sandbox builder.
-     */
-    public function __construct(/**
-     * The user ID bound to the builder.
-     */
+    public function __construct(
         private readonly int|string $userId,
+        ?Sandbox $sandbox = null,
     ) {
-        $this->sandbox = app(Sandbox::class);
+        $this->sandbox = $sandbox ?? app(Sandbox::class);
     }
+
+    private readonly Sandbox $sandbox;
 
     /**
      * Open the sandbox for the builder user.
@@ -88,7 +82,7 @@ class SandboxBuilder
     /**
      * Get the current sandbox status row.
      */
-    public function status(): ?Models\SandboxStatus
+    public function status(): ?SandboxStatus
     {
         return $this->sandbox->status();
     }

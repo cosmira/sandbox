@@ -32,8 +32,12 @@ class SandboxServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/sandbox.php', 'sandbox');
 
+        $this->app->scoped(Eloquent\TableContext::class);
         $this->app->singleton(SandboxModelRegistry::class);
-        $this->app->singleton(Contracts\SandboxBackend::class, Backends\EloquentSandboxBackend::class);
+        $this->app->singleton(
+            Contracts\SandboxBackend::class,
+            Backends\EloquentSandboxBackend::class,
+        );
         $this->app->singleton(Sandbox::class);
     }
 
@@ -47,26 +51,9 @@ class SandboxServiceProvider extends ServiceProvider
             SandboxMiddleware::class,
         );
 
-        Event::listen(SandboxCommitted::class, fn (): mixed => app(SandboxModelRegistry::class)
-            ->restoreActiveTables());
-        Event::listen(SandboxRolledBack::class, fn (): mixed => app(SandboxModelRegistry::class)
-            ->restoreActiveTables());
-
-        Sandbox::macro('for', function (int|string $userId) {
-            return new SandboxBuilder($userId);
-        });
-
-        Sandbox::macro('me', function () {
-            $user = auth()->user();
-            if (! $user) {
-                throw new \RuntimeException(
-                    'No authenticated user found. '
-                    .'Use Sandbox::for($userId) instead of Sandbox::me().',
-                );
-            }
-
-            return new SandboxBuilder($user->getAuthIdentifier());
-        });
+        $registry = $this->app->make(SandboxModelRegistry::class);
+        Event::listen(SandboxCommitted::class, fn () => $registry->restoreActiveTables());
+        Event::listen(SandboxRolledBack::class, fn () => $registry->restoreActiveTables());
 
         if ($this->app->runningInConsole()) {
             $commands = [

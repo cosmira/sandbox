@@ -19,23 +19,27 @@ class SandboxRecordRestorer
      */
     public function restore(Model $model): void
     {
-        $this->ensureModelCanRestoreSingleRecord($model);
+        $this->ensureRestorableModel($model);
 
         $keyColumns = $this->keyColumns($model);
         $keyValues = $this->keyValues($model, $keyColumns);
 
-        if ($this->missingKeyValues($keyValues, $keyColumns)) {
+        if ($this->hasMissingKeyValues($keyValues, $keyColumns)) {
             return;
         }
 
         $columns = $this->syncColumnsFor($model, $keyColumns);
-        $row = $model->getConnection()->table($model->getActiveTable())->where($keyValues)->first($columns);
+        $row = $model->getConnection()->table($model->getActiveTable())->where($keyValues)->first(
+            $columns,
+        );
 
         if ($row === null) {
             $model->getConnection()->table($model->getSandboxTable())->where($keyValues)->delete();
-        } else {
-            $this->writeSandboxRow($model, $keyValues, (array) $row, $keyColumns);
+
+            return;
         }
+
+        $this->writeSandboxRow($model, $keyValues, (array) $row);
     }
 
     /**
@@ -43,7 +47,7 @@ class SandboxRecordRestorer
      *
      * @throws SandboxException
      */
-    private function ensureModelCanRestoreSingleRecord(Model $model): void
+    private function ensureRestorableModel(Model $model): void
     {
         foreach (['getActiveTable', 'getSandboxTable', 'getSandboxPrimaryKey'] as $method) {
             throw_unless(
@@ -88,7 +92,7 @@ class SandboxRecordRestorer
      * @param array<string, mixed> $keyValues
      * @param array<int, string>   $keyColumns
      */
-    private function missingKeyValues(array $keyValues, array $keyColumns): bool
+    private function hasMissingKeyValues(array $keyValues, array $keyColumns): bool
     {
         return count($keyValues) !== count($keyColumns) || in_array(null, $keyValues, true);
     }
@@ -122,13 +126,11 @@ class SandboxRecordRestorer
      *
      * @param array<string, mixed> $keyValues
      * @param array<string, mixed> $attributes
-     * @param array<int, string>   $keyColumns
      */
     private function writeSandboxRow(
         Model $model,
         array $keyValues,
         array $attributes,
-        array $keyColumns,
     ): void {
         $query = $model->getConnection()->table($model->getSandboxTable())->where($keyValues);
 
@@ -139,12 +141,14 @@ class SandboxRecordRestorer
         }
 
         $values = $attributes;
-        foreach ($keyColumns as $keyColumn) {
+        foreach ($this->keyColumns($model) as $keyColumn) {
             unset($values[$keyColumn]);
         }
 
         if ($values !== []) {
-            $model->getConnection()->table($model->getSandboxTable())->where($keyValues)->update($values);
+            $model->getConnection()->table($model->getSandboxTable())->where($keyValues)->update(
+                $values,
+            );
         }
     }
 }

@@ -48,7 +48,7 @@ class EloquentSandboxBackend implements SandboxBackend
      */
     public function open(int|string $userId, bool $force = false, ?string $note = null): void
     {
-        $this->ensureRegisteredConnections();
+        $this->models->ensureAllConnections($this->connection());
         Log::debug('Opening sandbox', ['user_id' => $userId]);
 
         $this->connection()->transaction(function () use ($userId, $force, $note): void {
@@ -68,7 +68,8 @@ class EloquentSandboxBackend implements SandboxBackend
             if ($status->isFree()) {
                 Event::dispatch(new SandboxResetting());
                 $this->initializeDraft();
-            } elseif ($force && ! $status->isForUser($userId)) {
+            }
+            if (! $status->isFree() && $force && ! $status->isForUser($userId)) {
                 Event::dispatch(new SandboxResetting());
             }
 
@@ -80,7 +81,9 @@ class EloquentSandboxBackend implements SandboxBackend
                 'change_date'    => now(),
             ]);
 
-            $this->connection()->afterCommit(fn () => Event::dispatch(new SandboxOpened($userId, $force, $note)));
+            $this->connection()->afterCommit(
+                fn () => Event::dispatch(new SandboxOpened($userId, $force, $note)),
+            );
 
             Log::info('Sandbox opened', ['user_id' => $userId]);
         });
@@ -140,19 +143,26 @@ class EloquentSandboxBackend implements SandboxBackend
             $modelClass = $modelOrClass instanceof Model ? $modelOrClass::class : $modelOrClass;
 
             throw_unless(
-                is_subclass_of($modelClass, Model::class) && method_exists($modelClass, 'resetSandbox'),
+                is_subclass_of($modelClass, Model::class)
+                    && method_exists($modelClass, 'resetSandbox'),
                 SandboxException::class,
-                sprintf('Model %s must extend %s and support resetSandbox().', $modelClass, Model::class),
+                sprintf(
+                    'Model %s must extend %s and support resetSandbox().',
+                    $modelClass,
+                    Model::class,
+                ),
                 SandboxException::CODE_MODEL_NOT_REGISTERED,
             );
 
-            $this->ensureModelConnection($modelOrClass instanceof Model ? $modelOrClass : new $modelClass());
+            $instance = $modelOrClass instanceof Model ? $modelOrClass : new $modelClass();
+            $this->models->ensureModelConnection($instance, $this->connection());
 
             if ($modelOrClass instanceof Model) {
                 $this->recordRestorer->restore($modelOrClass);
-            } else {
-                $modelClass::resetSandbox();
+
+                return;
             }
+            $modelClass::resetSandbox();
         });
     }
 
@@ -173,24 +183,6 @@ class EloquentSandboxBackend implements SandboxBackend
         );
     }
 
-    private function ensureRegisteredConnections(): void
-    {
-        $this->models->ensureTableConnection($this->connection());
-        foreach ($this->models->all() as $modelClass) {
-            $this->ensureModelConnection(new $modelClass());
-        }
-    }
-
-    private function ensureModelConnection(Model $model): void
-    {
-        throw_unless(
-            $model->getConnection() === $this->connection(),
-            SandboxException::class,
-            sprintf('Model %s must use the sandbox status connection.', $model::class),
-            SandboxException::CODE_MODEL_NOT_REGISTERED,
-        );
-    }
-
     /**
      * Close the sandbox with the given operation.
      *
@@ -201,7 +193,7 @@ class EloquentSandboxBackend implements SandboxBackend
         SandboxOperation $result,
         ?string $note = null,
     ): void {
-        $this->ensureRegisteredConnections();
+        $this->models->ensureAllConnections($this->connection());
         Log::debug('Closing sandbox', [
             'user_id' => $userId,
             'result'  => $result->label(),

@@ -39,6 +39,23 @@ class Sandbox
      */
     private readonly SandboxModelRegistry $models;
 
+    public function for(int|string $userId): SandboxBuilder
+    {
+        return new SandboxBuilder($userId, $this);
+    }
+
+    public function me(): SandboxBuilder
+    {
+        $user = auth()->guard()->user();
+        if ($user === null) {
+            throw new \RuntimeException(
+                'No authenticated user found. Use Sandbox::for($userId) instead of Sandbox::me().',
+            );
+        }
+
+        return $this->for($user->getAuthIdentifier());
+    }
+
     /**
      * Register models that belong to the sandbox workflow.
      *
@@ -62,8 +79,11 @@ class Sandbox
         return $this->backend->connection();
     }
 
-    public function open(int|string|Model $user, bool $force = false, ?string $note = null): void
-    {
+    public function open(
+        int|string|Model $user,
+        bool $force = false,
+        ?string $note = null,
+    ): void {
         $this->backend->open($this->userId($user), $force, $note);
     }
 
@@ -80,6 +100,27 @@ class Sandbox
     public function save(int|string|Model $user, ?string $note = null): void
     {
         $this->backend->save($this->userId($user), $note);
+    }
+
+    /**
+     * Get the scalar identifier for a user value.
+     */
+    private function userId(int|string|Model $user): int|string
+    {
+        if (! $user instanceof Model) {
+            return $user;
+        }
+
+        $key = $user->getKey();
+
+        throw_if(
+            $key === null,
+            SandboxException::class,
+            sprintf('Model %s has no key.', $user::class),
+            SandboxException::CODE_MODEL_NOT_REGISTERED,
+        );
+
+        return $key;
     }
 
     public function status(): ?SandboxStatus
@@ -131,26 +172,5 @@ class Sandbox
     public function resetSandboxData(int|string|Model $user, string|Model $modelOrClass): void
     {
         $this->reset($user, $modelOrClass);
-    }
-
-    /**
-     * Get the scalar identifier for a user value.
-     */
-    private function userId(int|string|Model $user): int|string
-    {
-        if (! $user instanceof Model) {
-            return $user;
-        }
-
-        $key = $user->getKey();
-
-        throw_if(
-            $key === null,
-            SandboxException::class,
-            sprintf('Model %s has no key.', $user::class),
-            SandboxException::CODE_MODEL_NOT_REGISTERED,
-        );
-
-        return $key;
     }
 }

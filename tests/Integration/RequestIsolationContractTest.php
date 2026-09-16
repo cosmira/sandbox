@@ -70,7 +70,7 @@ final class RequestIsolationContractTest extends TestCase
     {
         SandboxStatus::query()->update(['status' => $state, 'user_id' => 1]);
         $request = $this->request('GET', $user);
-        $response = (new SandboxMiddleware())->handle($request, fn () => new Response(RequestItem::query()->value('name')));
+        $response = (new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class)))->handle($request, fn () => new Response(RequestItem::query()->value('name')));
         $this->assertSame($expected, $response->getContent());
         $this->assertFalse(RequestItem::isUsingSandbox());
     }
@@ -94,7 +94,7 @@ final class RequestIsolationContractTest extends TestCase
         SandboxStatus::query()->update(['status' => $state, 'user_id' => $state === State::Saved ? 2 : 1]);
         $before = SandboxStatus::firstOrFail()->getAttributes();
         Event::fake([SandboxOpened::class]);
-        $response = (new SandboxMiddleware())->handle($this->request('PATCH', 1), function () use ($code): Response {
+        $response = (new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class)))->handle($this->request('PATCH', 1), function () use ($code): Response {
             RequestItem::query()->where('id', 1)->update(['name' => 'partial']);
 
             return new Response('rejected', $code);
@@ -111,7 +111,7 @@ final class RequestIsolationContractTest extends TestCase
     public function savedDraftCanBeResumedWithoutReplacingItsData(): void
     {
         SandboxStatus::query()->update(['status' => State::Saved, 'user_id' => 1]);
-        (new SandboxMiddleware())->handle($this->request('PATCH', 2), function (): Response {
+        (new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class)))->handle($this->request('PATCH', 2), function (): Response {
             $this->assertSame('draft', RequestItem::query()->value('name'));
 
             return new Response('ok');
@@ -138,7 +138,7 @@ final class RequestIsolationContractTest extends TestCase
         Event::fake([SandboxOpened::class]);
 
         try {
-            (new SandboxMiddleware())->handle($this->request('PATCH', 1), function (): never {
+            (new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class)))->handle($this->request('PATCH', 1), function (): never {
                 RequestItem::query()->where('id', 1)->update(['name' => 'partial']);
 
                 throw new \RuntimeException('controller failed');
@@ -158,7 +158,7 @@ final class RequestIsolationContractTest extends TestCase
     #[Test]
     public function sequentialUsersDoNotInheritEachOthersTableContext(): void
     {
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $write = $this->request('PATCH', 1);
         $middleware->handle($write, function (): Response {
             RequestItem::query()->where('id', 1)->update(['name' => 'private draft']);
@@ -192,7 +192,7 @@ final class RequestIsolationContractTest extends TestCase
         });
 
         try {
-            (new SandboxMiddleware())->handle($this->request('PATCH', 1), fn () => new Response('rejected', 422));
+            (new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class)))->handle($this->request('PATCH', 1), fn () => new Response('rejected', 422));
             $this->fail('A dynamic model on another connection must be rejected before it can write.');
         } catch (SandboxException $exception) {
             $this->assertSame(SandboxException::CODE_MODEL_NOT_REGISTERED, $exception->getCode());

@@ -1,0 +1,32 @@
+parameters:
+    level: 5
+    paths:
+        - src
+        - tests/TestCase.php
+    tmpDir: .phpstan.cache
+    # Legacy integrations are structural: capability guards accept Model subclasses
+    # without a package interface. Keep these exceptions local to validated dispatch;
+    # misspelled methods and other receivers remain errors.
+    ignoreErrors:
+        -
+            message: '#^Call to an undefined static method Illuminate\\Database\\Eloquent\\Model::(isUsingSandbox|useSandbox|useActive)\(\)\.$#'
+            paths:
+                - src/Eloquent/SelectionFrame.php
+                - src/Support/SandboxModelRegistry.php
+        -
+            message: '#^Call to an undefined static method Illuminate\\Database\\Eloquent\\Model::(resetSandbox|applySandbox)\(\)\.$#'
+            path: src/Support/SandboxModelRegistry.php
+        -
+            message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model::(getActiveTable|getSandboxTable|getSandboxPrimaryKey)\(\)\.$#'
+            path: src/Support/SandboxRecordRestorer.php
+        # These Laravel methods predate the refactor but are absent from its
+        # ConnectionInterface; retain that public signature for custom backends.
+        -
+            message: '#^Call to an undefined method Illuminate\\Database\\ConnectionInterface::afterCommit\(\)\.$#'
+            path: src/Backends/EloquentSandboxBackend.php
+        -
+            message: '#^Call to an undefined method Illuminate\\Database\\ConnectionInterface::getDriverName\(\)\.$#'
+            path: src/Database/ProcedureCaller.php
+        -
+            message: '#^Call to an undefined method Illuminate\\Database\\ConnectionInterface::getSchemaBuilder\(\)\.$#'
+            path: src/Support/SandboxTableSynchronizer.php

@@ -17,7 +17,7 @@ final class SandboxTableTest extends TestCase
     public function invalidDefinitionsAreRejected(string $table, array $keys, ?string $draft): void
     {
         $this->expectException(InvalidArgumentException::class);
-        new SandboxTable($table, $keys, $draft);
+        new SandboxTable($table, $keys, sandboxTable: $draft ?? $table.'_sb');
     }
 
     public static function invalidDefinitions(): iterable

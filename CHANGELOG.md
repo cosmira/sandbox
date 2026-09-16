@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Model table selections belong to a scoped service; existing trait-only models
+  and static configuration remain supported.
+- Synchronization uses direct arguments; table definitions retain their simple
+  constructor and `_sb` convention.
+- Lifecycle operations share one backend; `me()`, boolean `force` arguments and
+  existing public namespaces are preserved.
+- Existing constructors, method names and synchronization arguments are preserved;
+  see [compatibility notes](docs/upgrading.md).
+
+### Added
+
+- PHPStan runs locally through `composer test:types` and in GitHub Actions.
+
 ## 0.1.0 - 2026-09-14
 
 Initial stable package release for Laravel 12 and 13.

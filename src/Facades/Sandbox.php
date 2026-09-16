@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Facade;
 
 /**
  * Facade for the sandbox service.
+ *
+ * @mixin \Cosmira\Sandbox\Sandbox
  */
 class Sandbox extends Facade
 {

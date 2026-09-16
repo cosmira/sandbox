@@ -74,11 +74,7 @@ final class SelectiveCopyContractTest extends TestCase
             ['id' => 3, 'source' => 'external', 'name' => 'Keep external', 'external_value' => 'External'],
             ['id' => 4, 'source' => 'local', 'name' => 'Remove local', 'external_value' => 'Obsolete'],
         ]);
-        $table = new SandboxTable('copy_items', ['id'], reset: new SandboxCopyRules(
-            updateColumns: ['name'],
-            inserts: fn (Builder $query) => $query->where('source', 'local'),
-            deletes: fn (Builder $query) => $query->where('source', 'local'),
-        ));
+        $table = new SandboxTable('copy_items', ['id'], reset: new SandboxCopyRules(updateColumns: ['name'], inserts: fn (Builder $query) => $query->where('source', 'local'), deletes: fn (Builder $query) => $query->where('source', 'local')));
 
         $table->resetSandbox(DB::connection());
 
@@ -95,9 +91,7 @@ final class SelectiveCopyContractTest extends TestCase
             DB::table('copy_items')->insert(['id' => $id, 'source' => 'local', 'name' => 'Active', 'external_value' => 'Value']);
             DB::table('copy_items_sb')->insert(['id' => $id, 'source' => $id === 1 ? 'local' : 'external', 'name' => 'Draft', 'external_value' => 'Value']);
         }
-        $table = new SandboxTable('copy_items', ['id'], reset: new SandboxCopyRules(
-            updates: fn (Builder $query) => $query->where('source.source', 'local')->where('target.source', 'local'),
-        ));
+        $table = new SandboxTable('copy_items', ['id'], reset: new SandboxCopyRules(updates: fn (Builder $query) => $query->where('source.source', 'local')->where('target.source', 'local')));
         $table->resetSandbox(DB::connection());
         $this->assertSame(['Active', 'Draft'], DB::table('copy_items_sb')->orderBy('id')->pluck('name')->all());
     }
@@ -174,10 +168,7 @@ final class SelectiveCopyContractTest extends TestCase
             ['id' => 1, 'source' => 'external', 'name' => 'Published', 'external_value' => 'Published'],
             ['id' => 2, 'source' => 'external', 'name' => 'New', 'external_value' => 'New'],
         ]);
-        $table = new SandboxTable('copy_items', ['id'], reset: new SandboxCopyRules(
-            updateColumns: [],
-            inserts: fn (Builder $query) => $query->where('source', 'local'),
-        ));
+        $table = new SandboxTable('copy_items', ['id'], reset: new SandboxCopyRules(updateColumns: [], inserts: fn (Builder $query) => $query->where('source', 'local')));
         $table->applySandbox(DB::connection());
         $this->assertSame(
             DB::table('copy_items_sb')->orderBy('id')->get()->toJson(),

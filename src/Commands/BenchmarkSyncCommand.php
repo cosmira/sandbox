@@ -4,12 +4,9 @@ declare(strict_types=1);
 
 namespace Cosmira\Sandbox\Commands;
 
-use Cosmira\Sandbox\HasSandbox;
-
 use function DragonCode\Benchmark\bench;
 
 use Illuminate\Console\Command;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -89,8 +86,8 @@ class BenchmarkSyncCommand extends Command
         Schema::dropIfExists($this->sandboxTable);
         Schema::dropIfExists($this->activeTable);
 
-        Schema::create($this->activeTable, fn ($table) => $this->defineSchema($table));
-        Schema::create($this->sandboxTable, fn ($table) => $this->defineSchema($table));
+        Schema::create($this->activeTable, fn (Blueprint $table) => $this->defineSchema($table));
+        Schema::create($this->sandboxTable, fn (Blueprint $table) => $this->defineSchema($table));
     }
 
     /**
@@ -98,12 +95,21 @@ class BenchmarkSyncCommand extends Command
      *
      * @param Blueprint $table
      */
-    protected function defineSchema($table): void
+    protected function defineSchema(Blueprint $table): void
     {
         $table->id();
         $table->string('name');
         $table->integer('value')->default(0);
         $table->timestamps();
+    }
+
+    /**
+     * Truncate both benchmark tables.
+     */
+    protected function resetTables(): void
+    {
+        DB::table($this->activeTable)->delete();
+        DB::table($this->sandboxTable)->delete();
     }
 
     /**
@@ -116,15 +122,16 @@ class BenchmarkSyncCommand extends Command
         $data = [];
         $now = now()->toDateTimeString();
 
-        for ($i = 1; $i <= $this->recordCount; $i++) {
+        for ($index = 1; $index <= $this->recordCount; $index++) {
             $data[] = [
-                'name'       => "item_{$i}",
-                'value'      => $i * 10,
+                'name'       => "item_{$index}",
+                'value'      => $index * 10,
                 'created_at' => $now,
                 'updated_at' => $now,
             ];
 
-            if ($i % 10_000 === 0) {
+            $batchIsFull = $index % 10_000 === 0;
+            if ($batchIsFull) {
                 $this->bulkInsert($table, $data);
                 $data = [];
             }
@@ -142,15 +149,16 @@ class BenchmarkSyncCommand extends Command
         $now = now()->toDateTimeString();
         $limit = (int) ($this->recordCount / 2);
 
-        for ($i = 1; $i <= $limit; $i++) {
+        for ($index = 1; $index <= $limit; $index++) {
             $data[] = [
-                'name'       => "sandbox_item_{$i}",
-                'value'      => $i * 20,
+                'name'       => "sandbox_item_{$index}",
+                'value'      => $index * 20,
                 'created_at' => $now,
                 'updated_at' => $now,
             ];
 
-            if ($i % 10_000 === 0) {
+            $batchIsFull = $index % 10_000 === 0;
+            if ($batchIsFull) {
                 $this->bulkInsert($table, $data);
                 $data = [];
             }
@@ -202,71 +210,11 @@ class BenchmarkSyncCommand extends Command
     }
 
     /**
-     * Truncate both benchmark tables.
-     */
-    protected function resetTables(): void
-    {
-        DB::table($this->activeTable)->delete();
-        DB::table($this->sandboxTable)->delete();
-    }
-
-    /**
      * Drop the benchmark tables.
      */
     protected function teardownTables(): void
     {
         Schema::dropIfExists($this->sandboxTable);
         Schema::dropIfExists($this->activeTable);
-    }
-}
-
-class BenchmarkItem extends Model
-{
-    use HasSandbox;
-
-    /**
-     * The table associated with the model.
-     *
-     * @var string
-     */
-    protected $table = 'benchmark_items';
-
-    /**
-     * The attributes that are not mass assignable.
-     *
-     * @var array<int, string>
-     */
-    protected $guarded = [];
-
-    /**
-     * Indicates if the model should be timestamped.
-     *
-     * @var bool
-     */
-    public $timestamps = true;
-
-    /**
-     * Indicates if the IDs are auto-incrementing.
-     *
-     * @var bool
-     */
-    public $incrementing = true;
-
-    /**
-     * Get the column used to compare changes during sandbox sync.
-     */
-    protected static function getSandboxTrackChangeColumn(): ?string
-    {
-        return null;
-    }
-
-    /**
-     * Get the columns copied by benchmark sync operations.
-     *
-     * @return array<int, string>
-     */
-    protected function getSandboxSyncColumns(): array
-    {
-        return ['id', 'name', 'value', 'created_at', 'updated_at'];
     }
 }

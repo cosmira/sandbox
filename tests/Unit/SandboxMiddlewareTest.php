@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cosmira\Sandbox\Tests\Unit;
 
+use Cosmira\Sandbox\Contracts\SandboxBackend;
 use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
 use Cosmira\Sandbox\Events\SandboxResolvingModels;
 use Cosmira\Sandbox\HasSandbox;
@@ -26,7 +27,7 @@ final class SandboxMiddlewareTest extends TestCase
     {
         parent::setUp();
 
-        SandboxResolvingModels::restoreActiveTables();
+        app(SandboxModelRegistry::class)->restoreActiveTables();
         MiddlewareSandboxModelStub::useActive();
     }
 
@@ -36,7 +37,7 @@ final class SandboxMiddlewareTest extends TestCase
         SandboxStatus::query()->update(['status' => SandboxStatusEnum::Free]);
         Event::fake([SandboxResolvingModels::class]);
 
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $request = Request::create('/categories', 'GET');
 
         $middleware->handle($request, function (): string {
@@ -60,7 +61,7 @@ final class SandboxMiddlewareTest extends TestCase
             $event->models(MiddlewareSandboxModelStub::class);
         });
 
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $request = Request::create('/categories', 'GET');
         $request->setUserResolver(fn () => new StringIdentifierUserStub('1'));
 
@@ -79,7 +80,7 @@ final class SandboxMiddlewareTest extends TestCase
         SandboxStatus::query()->update(['status' => SandboxStatusEnum::Saved]);
         Event::fake([SandboxResolvingModels::class]);
 
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $request = Request::create('/categories', 'GET');
         $request->setUserResolver(fn () => new StringIdentifierUserStub('1'));
 
@@ -94,7 +95,7 @@ final class SandboxMiddlewareTest extends TestCase
         SandboxStatus::query()->update(['status' => SandboxStatusEnum::Saved]);
 
         $registry = new TrackingSandboxMiddlewareRegistry();
-        $middleware = new SandboxMiddleware($registry);
+        $middleware = new SandboxMiddleware($registry, sandbox: app(Sandbox::class));
         $request = Request::create('/categories', 'GET');
         $request->setUserResolver(fn () => new StringIdentifierUserStub('1'));
 
@@ -111,7 +112,7 @@ final class SandboxMiddlewareTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $user = $this->createUser(id: 1);
         $request = Request::create('/categories', 'POST');
         $request->setUserResolver(fn () => $user);
@@ -140,7 +141,7 @@ final class SandboxMiddlewareTest extends TestCase
             'user_id' => null,
         ]);
 
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $user = $this->createUser(id: 1);
         $request = Request::create('/categories', 'POST');
         $request->setUserResolver(fn () => $user);
@@ -172,8 +173,8 @@ final class SandboxMiddlewareTest extends TestCase
             'user_id' => null,
         ]);
 
-        $sandbox = new TrackingSandboxMiddlewareSandbox();
-        $middleware = new SandboxMiddleware(sandbox: $sandbox);
+        $sandbox = new TrackingSandboxMiddlewareSandbox(app(SandboxModelRegistry::class), app(SandboxBackend::class));
+        $middleware = new SandboxMiddleware(sandbox: $sandbox, models: app(SandboxModelRegistry::class));
         $request = Request::create('/categories', 'POST');
         $request->setUserResolver(fn () => new StringIdentifierUserStub('7'));
 
@@ -191,7 +192,7 @@ final class SandboxMiddlewareTest extends TestCase
             'user_id' => 5,
         ]);
 
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $user = $this->createUser(id: 1);
         $request = Request::create('/categories', 'POST');
         $request->setUserResolver(fn () => $user);
@@ -212,7 +213,7 @@ final class SandboxMiddlewareTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $user = $this->createUser(id: 1);
         $request = Request::create('/categories', 'PATCH');
         $request->setUserResolver(fn () => $user);
@@ -244,7 +245,7 @@ final class SandboxMiddlewareTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $user = $this->createUser(id: 2);
         $request = Request::create('/categories', 'PATCH');
         $request->setUserResolver(fn () => $user);
@@ -261,7 +262,7 @@ final class SandboxMiddlewareTest extends TestCase
             'user_id' => null,
         ]);
 
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $request = Request::create('/categories', 'POST');
 
         try {
@@ -284,7 +285,7 @@ final class SandboxMiddlewareTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $request = Request::create('/categories', 'POST');
         $request->setUserResolver(fn () => $this->createUser(id: 1));
 
@@ -311,7 +312,7 @@ final class SandboxMiddlewareTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $request = Request::create('/categories', 'POST');
         $request->setUserResolver(fn () => new StringIdentifierUserStub('1'));
 
@@ -328,7 +329,7 @@ final class SandboxMiddlewareTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $request = Request::create('/categories', 'POST');
         $request->setUserResolver(fn () => $this->createUser(id: 2));
 
@@ -358,7 +359,7 @@ final class SandboxMiddlewareTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $request = Request::create('/categories', 'DELETE');
 
         try {
@@ -378,7 +379,7 @@ final class SandboxMiddlewareTest extends TestCase
     {
         SandboxStatus::query()->delete();
 
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $request = Request::create('/categories', 'POST');
         $request->setUserResolver(fn () => new StringIdentifierUserStub('1'));
 
@@ -403,7 +404,7 @@ final class SandboxMiddlewareTest extends TestCase
 
         MiddlewareSandboxModelStub::useSandbox();
 
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $request = Request::create('/categories/1', 'DELETE');
         $request->setUserResolver(fn () => $this->createUser(id: 1));
 
@@ -432,7 +433,7 @@ final class SandboxMiddlewareTest extends TestCase
 
         $this->expectException(RuntimeException::class);
 
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $request = Request::create('/categories/1', 'PATCH');
         $request->setUserResolver(fn () => $this->createUser(id: 1));
 
@@ -459,7 +460,7 @@ final class SandboxMiddlewareTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
         $request = Request::create('/categories/1', 'PATCH');
         $request->setUserResolver(fn () => $this->createUser(id: 1));
 

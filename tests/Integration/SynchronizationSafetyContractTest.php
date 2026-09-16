@@ -92,7 +92,14 @@ final class SynchronizationSafetyContractTest extends TestCase
 
         try {
             (new SandboxTableSynchronizer($connection))->sync(
-                'sync_contract', 'sync_contract_sb', ['id'], [], null,
+                sourceTable: 'sync_contract',
+                targetTable: 'sync_contract_sb',
+                keyColumns: ['id'],
+                columns: [],
+                changeColumn: null,
+                sourceAlias: 'source',
+                targetAlias: 'target',
+                parentColumn: null,
             );
             $this->assertSame('explicit connection', $connection->table('sync_contract_sb')->value('value'));
             $this->assertFalse(DB::connection()->getSchemaBuilder()->hasTable('sync_contract_sb'));
@@ -136,7 +143,14 @@ final class SynchronizationSafetyContractTest extends TestCase
             DB::table('composite_sync')->insert($rows);
             DB::table('composite_sync_sb')->insert(['tenant' => 1, 'sequence' => 2, 'value' => 'old']);
             (new SandboxTableSynchronizer(DB::connection()))->sync(
-                'composite_sync', 'composite_sync_sb', ['tenant', 'sequence'], ['value'], null,
+                sourceTable: 'composite_sync',
+                targetTable: 'composite_sync_sb',
+                keyColumns: ['tenant', 'sequence'],
+                columns: ['value'],
+                changeColumn: null,
+                sourceAlias: 'source',
+                targetAlias: 'target',
+                parentColumn: null,
             );
             $actual = DB::table('composite_sync_sb')->orderBy('tenant')->orderBy('sequence')->get()
                 ->map(fn (object $row): array => (array) $row)->all();
@@ -200,6 +214,9 @@ final class SynchronizationSafetyContractTest extends TestCase
             keyColumns: ['id'],
             columns: ['id', 'value', 'change_date'],
             changeColumn: $changeColumn,
+            sourceAlias: 'source',
+            targetAlias: 'target',
+            parentColumn: null,
         );
     }
 }

@@ -11,7 +11,7 @@ use PHPUnit\Framework\Attributes\Test;
 class AutoUserDetectionTest extends TestCase
 {
     #[Test]
-    public function canUseMeMethodWithAuthenticatedUser(): void
+    public function canUseCurrentUserWithAuthenticatedUser(): void
     {
         $this->actingAs($user = $this->createUser(id: 42));
 
@@ -21,16 +21,18 @@ class AutoUserDetectionTest extends TestCase
     }
 
     #[Test]
-    public function meMacroThrowsWithoutAuthenticatedUser(): void
+    public function currentUserThrowsWithoutAuthenticatedUser(): void
     {
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('No authenticated user found');
+        $this->expectExceptionMessage(
+            'No authenticated user found. Use Sandbox::for($userId) instead of Sandbox::me().',
+        );
 
         Sandbox::me();
     }
 
     #[Test]
-    public function fluentApiWorksWithMeMethod(): void
+    public function fluentApiWorksWithCurrentUser(): void
     {
         $this->actingAs($user = $this->createUser(id: 99));
 

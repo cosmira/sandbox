@@ -215,6 +215,8 @@ class HelperSwitchModelStub extends Model
         return self::$usingSandboxTable;
     }
 
+    public static function applySandbox(): void {}
+
     public static function resetSandbox(): void
     {
         self::$synced = true;

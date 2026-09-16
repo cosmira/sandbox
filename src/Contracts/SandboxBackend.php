@@ -17,7 +17,11 @@ interface SandboxBackend
     public function connection(): ConnectionInterface;
 
     /** The host must authorize force takeover before calling this method. */
-    public function open(int|string $userId, bool $force = false, ?string $note = null): void;
+    public function open(
+        int|string $userId,
+        bool $force = false,
+        ?string $note = null,
+    ): void;
 
     public function commit(int|string $userId, ?string $note = null): void;
 

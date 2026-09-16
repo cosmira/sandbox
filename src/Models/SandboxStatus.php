@@ -12,9 +12,18 @@ use Cosmira\Sandbox\Support\SandboxStatusLocker;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 
 /**
  * The persisted status row for the sandbox lifecycle.
+ *
+ * @property int|string|null       $user_id
+ * @property SandboxStatusEnum     $status
+ * @property SandboxOperation|null $last_operation
+ * @property Carbon                $change_date
+ * @property Carbon|null           $send_date
+ * @property int                   $change_id
+ * @property string|null           $note
  */
 class SandboxStatus extends Model
 {
@@ -85,7 +94,7 @@ class SandboxStatus extends Model
     /**
      * Keyless tables are provisioned by the host, never inferred or repaired during editing.
      *
-     * @param Builder<static>|null $query
+     * @param Builder<covariant static>|null $query
      */
     public function singleton(?Builder $query = null): static
     {
@@ -97,7 +106,7 @@ class SandboxStatus extends Model
         return $rows->first();
     }
 
-    protected function setKeysForSaveQuery($query)
+    protected function setKeysForSaveQuery(mixed $query)
     {
         if ($this->getKeyName() !== null) {
             return parent::setKeysForSaveQuery($query);
@@ -108,7 +117,7 @@ class SandboxStatus extends Model
         return $query;
     }
 
-    protected function setKeysForSelectQuery($query)
+    protected function setKeysForSelectQuery(mixed $query)
     {
         if ($this->getKeyName() !== null) {
             return parent::setKeysForSelectQuery($query);

@@ -6,6 +6,7 @@ namespace Cosmira\Sandbox\Tests\Unit;
 
 use Carbon\Carbon;
 use Cosmira\Sandbox\Backends\EloquentSandboxBackend;
+use Cosmira\Sandbox\Contracts\SandboxBackend;
 use Cosmira\Sandbox\Enums\SandboxOperation;
 use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
 use Cosmira\Sandbox\Events\SandboxCommitted;
@@ -339,7 +340,7 @@ final class SandboxTest extends TestCase
     public function itUsesTheInjectedModelRegistry(): void
     {
         $models = new TrackingSandboxRegistry();
-        $sandbox = new Sandbox(models: $models);
+        $sandbox = new Sandbox(models: $models, backend: app(SandboxBackend::class));
 
         $sandbox->models(InjectedSandboxModelStub::class);
 
@@ -351,7 +352,10 @@ final class SandboxTest extends TestCase
     {
         $recordRestorer = new TrackingSandboxRecordRestorer();
         $models = new SandboxModelRegistry();
-        $sandbox = new Sandbox(backend: new EloquentSandboxBackend($models, $recordRestorer));
+        $sandbox = new Sandbox(
+            backend: new EloquentSandboxBackend($models, $recordRestorer),
+            models: app(SandboxModelRegistry::class),
+        );
         SandboxStatus::factory()->create(['status' => SandboxStatusEnum::Locked, 'user_id' => 1]);
         $model = new InjectedSandboxModelStub();
 
@@ -496,6 +500,8 @@ class TrackingSandboxRecordRestorer extends SandboxRecordRestorer
 
 class InjectedSandboxModelStub extends Model
 {
+    public static function applySandbox(): void {}
+
     public static function resetSandbox(): void {}
 }
 

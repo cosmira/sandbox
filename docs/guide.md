@@ -67,7 +67,7 @@ feature_flags -> feature_flags_sb
 
 ## Quick Start
 
-Add `HasSandbox` to the models that belong to your configuration.
+Add `HasSandbox` to your configuration models.
 
 ```php
 use Cosmira\Sandbox\HasSandbox;
@@ -271,8 +271,8 @@ For operational recovery, an administrator can force ownership:
 Sandbox::for($adminId)->open(force: true, note: 'Taking over abandoned draft');
 ```
 
-Use `force: true` deliberately. It is a recovery tool for abandoned or
-operator-managed drafts, not the normal collaboration path.
+Use `force: true` deliberately.
+It is a recovery tool for abandoned or operator-managed drafts, not the normal collaboration path.
 
 ## Lifecycle API
 
@@ -314,6 +314,7 @@ Opening an already Locked draft as its owner is a no-op, without another event.
 Callback API (facade or injected `Sandbox`):
 
 ```php
+
 Sandbox::read($userId, fn (bool $draft) => Product::query()->get());
 Sandbox::read(null, fn (bool $draft) => Product::query()->get()); // guest: active
 Sandbox::edit($userId, fn () => Product::query()->create($attributes));
@@ -381,12 +382,15 @@ use Cosmira\Sandbox\SandboxTable;
 
 Sandbox::models(Person::class, Group::class);
 Sandbox::tables(
-    new SandboxTable('person_group', ['person_id', 'group_id']),
+    new SandboxTable(
+        'person_group',
+        ['person_id', 'group_id'],
+    ),
 );
 ```
 
-The draft table defaults to `person_group_sb`. To use a different name, pass
-`sandboxTable: 'person_group_draft'`. Both tables must already exist. The
+The draft table defaults to the active name plus `_sb`. Pass `sandboxTable:`
+for a custom draft name. Both tables must already exist. The
 package copies all columns through its existing table synchronizer; no
 `change_date` column is required. Registrations use the sandbox backend's
 connection. A conflicting definition or a table also registered through a
@@ -416,7 +420,7 @@ does not solve cyclic foreign-key dependencies. `save()` preserves the draft.
 Table registrations do not appear in the model registry's `all()` result.
 
 For a self-referencing tree with a single primary key, pass
-`parentColumn: 'parent_id'`. The synchronizer inserts parents before their
+`parentColumn: 'parent_id'` to `SandboxTable`. The synchronizer inserts parents before their
 children and before reparenting existing rows, including across insert chunks.
 Unresolved parents or cycles among missing rows reject the copy and roll back
 the transaction. This option does not resolve cycles between different tables.
@@ -425,11 +429,15 @@ Applications sharing a draft with another writer can describe the rows and
 columns they own without implementing a copying algorithm:
 
 ```php
-new SandboxTable('contacts', ['id'], reset: new SandboxCopyRules(
-    updateColumns: ['label', 'note'],
-    inserts: fn (Builder $query) => $query->where('source', 'local'),
-    deletes: fn (Builder $query) => $query->where('source', 'local'),
-));
+new SandboxTable(
+    'contacts',
+    ['id'],
+    reset: new SandboxCopyRules(
+        updateColumns: ['label', 'note'],
+        inserts: fn (Builder $query) => $query->where('source', 'local'),
+        deletes: fn (Builder $query) => $query->where('source', 'local'),
+    ),
+);
 ```
 
 Import `Cosmira\Sandbox\SandboxCopyRules` and `Illuminate\Database\Query\Builder`.
@@ -486,13 +494,13 @@ class Product extends Model
 }
 ```
 
-Model options:
+Model options are method overrides; there are no mutable static configuration properties:
 
-| Property | Default | Description |
+| Override method | Default | Description |
 | --- | --- | --- |
-| `$sandboxTablePostfix` | `'_sb'` | Sandbox table suffix |
-| `$sandboxPrimaryKey` | model key | Single or composite sync key |
-| `$sandboxTrackChangeColumn` | `'change_date'` when `$timestamps` is enabled; otherwise none | Optional column validated during copying; not an equality shortcut |
+| `getSandboxTablePostfix()` | `'_sb'` | Sandbox table suffix |
+| `getSandboxPrimaryKey()` | model key | Single or composite sync key |
+| `getSandboxTrackChangeColumn()` | `'change_date'` when `$timestamps` is enabled; otherwise none | Optional column validated during copying; not an equality shortcut |
 
 Models with `public $timestamps = false` do not need a tracking-column override.
 Synchronization still copies changed values. Custom column names and explicit `null`

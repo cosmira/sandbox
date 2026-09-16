@@ -7,6 +7,7 @@ namespace Cosmira\Sandbox\Tests\Integration;
 use Cosmira\Sandbox\HasSandbox;
 use Cosmira\Sandbox\Http\Middleware\SandboxMiddleware;
 use Cosmira\Sandbox\Sandbox;
+use Cosmira\Sandbox\Support\SandboxModelRegistry;
 use Cosmira\Sandbox\Tests\TestCase;
 use Cosmira\Sandbox\Tests\TestUser;
 use Illuminate\Database\Eloquent\Model;
@@ -55,7 +56,7 @@ final class ConfigurationWorkflowTest extends TestCase
     {
         $owner = $this->createConfigurationUser(1);
         $other = $this->createConfigurationUser(2);
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
 
         app(Sandbox::class)->open($owner);
         ConfigurationModelStub::resetSandbox();
@@ -100,7 +101,7 @@ final class ConfigurationWorkflowTest extends TestCase
     public function commitAppliesRegisteredSandboxModels(): void
     {
         $owner = $this->createConfigurationUser(3);
-        $middleware = new SandboxMiddleware();
+        $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
 
         app(Sandbox::class)->open($owner);
         app(Sandbox::class)->resetSandboxData($owner, ConfigurationModelStub::class);

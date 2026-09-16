@@ -11,6 +11,13 @@ use Illuminate\Database\Eloquent\Model;
 use Orchestra\Testbench\TestCase as BaseTestCase;
 use RuntimeException;
 
+/**
+ * @property int         $id
+ * @property string      $name
+ * @property string      $email
+ * @property string      $password
+ * @property string|null $remember_token
+ */
 class TestUser extends Model implements Authenticatable
 {
     protected $table = 'users';

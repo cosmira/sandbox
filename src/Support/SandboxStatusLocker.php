@@ -13,19 +13,27 @@ final class SandboxStatusLocker
     /**
      * The caller must already own the enclosing transaction.
      *
-     * @return Builder<SandboxStatus>
+     * @template TStatus of SandboxStatus
+     *
+     * @param TStatus $model
+     *
+     * @return Builder<TStatus>
      */
     public function query(SandboxStatus $model): Builder
     {
-        if ($model->getConnection()->transactionLevel() === 0) {
+        $connection = $model->getConnection();
+        if ($connection->transactionLevel() === 0) {
             throw new \LogicException('Sandbox status locking requires a transaction.');
         }
 
-        if ($model->getConnection()->getDriverName() === 'sqlite') {
+        if ($connection->getDriverName() === 'sqlite') {
             // SQLite has no FOR UPDATE; reserve the write lock before reading a snapshot.
             $model->newQuery()->toBase()->update(['status' => new Expression('status')]);
         }
 
-        return $model->newQuery()->lockForUpdate();
+        $query = $model->newQuery();
+        $query->lockForUpdate();
+
+        return $query;
     }
 }

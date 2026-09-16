@@ -157,7 +157,7 @@ final class LifecycleApiContractTest extends TestCase
         $model = new ApiResetModel();
         $backend = $this->createMock(SandboxBackend::class);
         $backend->expects($this->exactly(4))->method('reset')->with(7, $model);
-        $sandbox = new Sandbox(backend: $backend);
+        $sandbox = new Sandbox(backend: $backend, models: app(SandboxModelRegistry::class));
         $this->app->instance(Sandbox::class, $sandbox);
         SandboxFacade::clearResolvedInstance(Sandbox::class);
 
@@ -175,7 +175,7 @@ final class LifecycleApiContractTest extends TestCase
         $backend->expects($this->once())->method('commit')->with(7, 'Commit');
         $backend->expects($this->once())->method('save')->with(7, 'Save');
         $backend->expects($this->once())->method('rollback')->with(7, 'Rollback');
-        $sandbox = new Sandbox(backend: $backend);
+        $sandbox = new Sandbox(backend: $backend, models: app(SandboxModelRegistry::class));
 
         $sandbox->open(7, true, 'Recovery');
         $sandbox->commit(7, 'Commit');
@@ -192,7 +192,7 @@ final class LifecycleApiContractTest extends TestCase
             ->willThrowException(new SandboxException('Use the host lifecycle.'));
 
         try {
-            (new Sandbox(backend: $backend))->reset(7, ApiResetModel::class);
+            (new Sandbox(backend: $backend, models: app(SandboxModelRegistry::class)))->reset(7, ApiResetModel::class);
             $this->fail('The backend rejection was ignored.');
         } catch (SandboxException $exception) {
             $this->assertSame('Use the host lifecycle.', $exception->getMessage());
@@ -215,7 +215,7 @@ final class LifecycleApiContractTest extends TestCase
             });
 
         try {
-            (new Sandbox(backend: $backend))->edit(7, function () use ($connection, $level): never {
+            (new Sandbox(backend: $backend, models: app(SandboxModelRegistry::class)))->edit(7, function () use ($connection, $level): never {
                 $this->assertSame($level + 1, $connection->transactionLevel());
 
                 throw new RuntimeException('Reject edit.');
@@ -237,7 +237,7 @@ final class LifecycleApiContractTest extends TestCase
             new SandboxStatus(['status' => Status::Saved, 'user_id' => 1]),
         );
 
-        $result = (new Sandbox(backend: $backend))->read(null, fn (bool $draft): bool => $draft);
+        $result = (new Sandbox(backend: $backend, models: app(SandboxModelRegistry::class)))->read(null, fn (bool $draft): bool => $draft);
 
         $this->assertFalse($result);
     }
@@ -333,6 +333,8 @@ final class LifecycleApiContractTest extends TestCase
 
 class ApiResetModel extends Model
 {
+    public static function applySandbox(): void {}
+
     public static int $resets = 0;
 
     public static function resetSandbox(): void

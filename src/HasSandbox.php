@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cosmira\Sandbox;
 
+use Cosmira\Sandbox\Eloquent\Context;
 use Cosmira\Sandbox\Relations\SandboxBelongsToMany;
 use Cosmira\Sandbox\Support\SandboxTableSynchronizer;
 use Illuminate\Database\Eloquent\Builder;
@@ -60,17 +61,13 @@ trait HasSandbox
      */
     protected static function getSandboxTrackChangeColumn(): ?string
     {
-        if (static::$sandboxTrackChangeColumn === 'change_date' && ! (new static())->timestamps) {
+        $model = new static();
+        if (static::$sandboxTrackChangeColumn === 'change_date' && ! $model->timestamps) {
             return null;
         }
 
         return static::$sandboxTrackChangeColumn;
     }
-
-    /**
-     * Indicates if queries should target sandbox data.
-     */
-    protected static bool $usesSandbox = false;
 
     private ?string $sandboxActiveTable = null;
 
@@ -86,7 +83,7 @@ trait HasSandbox
         return $this->sandboxActiveTable ??= parent::getTable();
     }
 
-    public function setTable($table): static
+    public function setTable(mixed $table): static
     {
         $this->sandboxResolvedDraft = match ($table) {
             $this->getActiveTable()  => false,
@@ -98,10 +95,18 @@ trait HasSandbox
         return $this;
     }
 
+    /**
+     * Get the sandbox table name for the model.
+     */
+    public function getSandboxTable(): string
+    {
+        return $this->getActiveTable().$this->getSandboxTablePostfix();
+    }
+
     /** Preserve the selected layer when Eloquent assigns a self-join alias. */
     public function isUsingSandboxTable(): bool
     {
-        return $this->sandboxResolvedDraft ?? static::$usesSandbox;
+        return $this->sandboxResolvedDraft ?? static::isUsingSandbox();
     }
 
     /**
@@ -118,7 +123,7 @@ trait HasSandbox
     public function getTableForQuery(): string
     {
         return $this->sandboxResolvedTable
-            ?? (static::$usesSandbox ? $this->getSandboxTable() : $this->getActiveTable());
+            ?? (static::isUsingSandbox() ? $this->getSandboxTable() : $this->getActiveTable());
     }
 
     /**
@@ -152,19 +157,11 @@ trait HasSandbox
     }
 
     /**
-     * Get the sandbox table name for the model.
-     */
-    public function getSandboxTable(): string
-    {
-        return $this->getActiveTable().$this->getSandboxTablePostfix();
-    }
-
-    /**
      * Switch model queries to sandbox data.
      */
     public static function useSandbox(): void
     {
-        static::$usesSandbox = true;
+        Context::select(static::class, true);
     }
 
     /**
@@ -172,7 +169,7 @@ trait HasSandbox
      */
     public static function useActive(): void
     {
-        static::$usesSandbox = false;
+        Context::select(static::class, false);
     }
 
     /**
@@ -180,7 +177,7 @@ trait HasSandbox
      */
     public static function isUsingSandbox(): bool
     {
-        return static::$usesSandbox;
+        return Context::isUsingSandbox(static::class);
     }
 
     /**
@@ -194,7 +191,7 @@ trait HasSandbox
      */
     public static function withoutSandbox(callable $callback): mixed
     {
-        return static::usingTableState(false, $callback);
+        return self::usingTableState(false, $callback);
     }
 
     /**
@@ -208,7 +205,7 @@ trait HasSandbox
      */
     public static function withSandbox(callable $callback): mixed
     {
-        return static::usingTableState(true, $callback);
+        return self::usingTableState(true, $callback);
     }
 
     /**
@@ -218,7 +215,9 @@ trait HasSandbox
     {
         $query->getModel()->setTable($this->getSandboxTable());
 
-        return $query->from($this->getSandboxTable());
+        $query->from($this->getSandboxTable());
+
+        return $query;
     }
 
     /**
@@ -228,7 +227,9 @@ trait HasSandbox
     {
         $query->getModel()->setTable($this->getActiveTable());
 
-        return $query->from($this->getActiveTable());
+        $query->from($this->getActiveTable());
+
+        return $query;
     }
 
     /**
@@ -300,15 +301,15 @@ trait HasSandbox
      *
      * @return TReturn
      */
-    private static function usingTableState(bool $useSandbox, callable $callback): mixed
+    private static function usingTableState(bool $draft, callable $callback): mixed
     {
-        $previousState = static::$usesSandbox;
-        static::$usesSandbox = $useSandbox;
+        $previousState = Context::isUsingSandbox(static::class);
+        Context::select(static::class, $draft);
 
         try {
             return $callback();
         } finally {
-            static::$usesSandbox = $previousState;
+            Context::select(static::class, $previousState);
         }
     }
 
@@ -329,7 +330,10 @@ trait HasSandbox
      */
     protected function getSandboxSyncColumns(): array
     {
-        return static::$sandboxSyncColumns ?? $this->getConnection()->getSchemaBuilder()->getColumnListing($this->getActiveTable());
+        return static::$sandboxSyncColumns
+            ?? $this->getConnection()->getSchemaBuilder()->getColumnListing(
+                $this->getActiveTable(),
+            );
     }
 
     /**

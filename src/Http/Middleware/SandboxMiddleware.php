@@ -33,7 +33,9 @@ class SandboxMiddleware
         $user = $request->user()?->getAuthIdentifier();
 
         if ($request->isMethodSafe()) {
-            return $this->sandbox->read($user, fn (bool $draft) => $this->resolve($request, $next, $draft));
+            return $this->sandbox->read(
+                $user, fn (bool $draft) => $this->resolve($request, $next, $draft),
+            );
         }
 
         abort_if($user === null, 403, 'An authenticated user is required to open the sandbox.');

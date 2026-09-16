@@ -12,11 +12,17 @@ final class ProcedureCaller
     /**
      * Invoke a PostgreSQL void function, or a MySQL/Oracle procedure.
      *
-     * @param list<int|float|string|bool|null> $parameters
+     * @param array<array-key, int|float|string|bool|null> $parameters
      */
-    public function call(ConnectionInterface $connection, string $procedure, array $parameters = []): void
-    {
-        if (! preg_match('/\A[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*\z/D', $procedure)) {
+    public function call(
+        ConnectionInterface $connection,
+        string $procedure,
+        array $parameters = [],
+    ): void {
+        if (! preg_match(
+            '/\A[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*\z/D',
+            $procedure,
+        )) {
             throw new InvalidArgumentException('Invalid procedure identifier.');
         }
 
@@ -29,7 +35,9 @@ final class ProcedureCaller
             'pgsql'                     => "SELECT {$procedure}({$arguments})",
             'mysql'                     => "CALL {$procedure}({$arguments})",
             'oracle', 'oci8'            => "BEGIN {$procedure}({$arguments}); END;",
-            default                     => throw new InvalidArgumentException('This database does not support procedure calls.'),
+            default                     => throw new InvalidArgumentException(
+                'This database does not support procedure calls.',
+            ),
         };
 
         $connection->statement($statement, $parameters);

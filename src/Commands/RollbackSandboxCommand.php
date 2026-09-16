@@ -43,8 +43,8 @@ class RollbackSandboxCommand extends Command
             $this->info('Sandbox rolled back');
 
             return self::SUCCESS;
-        } catch (SandboxException $e) {
-            $this->error("Failed to roll back sandbox: {$e->getMessage()}");
+        } catch (SandboxException $exception) {
+            $this->error("Failed to roll back sandbox: {$exception->getMessage()}");
 
             return self::FAILURE;
         }
@@ -61,7 +61,7 @@ class RollbackSandboxCommand extends Command
             return $userId;
         }
 
-        $user = auth()->user();
+        $user = auth()->guard()->user();
         if (! $user) {
             $this->error('No user specified and no authenticated user found');
 
