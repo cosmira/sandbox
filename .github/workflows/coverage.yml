@@ -1,70 +1,77 @@
 name: Code Coverage
 
 on:
-  pull_request:
   push:
-    paths:
-      - '.github/workflows/**'
-      - '**.php'
-      - 'phpunit.xml'
-      - 'composer.json'
-      - 'composer.lock'
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coverage-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   coverage:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
+    name: Coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout code
+        uses: actions/checkout@v7
 
-      - name: Setup PHP 🔧
+      - name: Setup PHP
+        id: php
         uses: shivammathur/setup-php@v2
         with:
-          php-version: 8.4
-          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, imagick
+          php-version: '8.4'
+          extensions: mbstring, dom, fileinfo, pdo_sqlite
           coverage: pcov
           tools: composer:v2
 
-      - name: Install Dependencies 🔧
-        run: composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
-
-      - name: Execute tests (Unit and Feature tests) via PHPUnit 🧪
-        run: vendor/bin/phpunit --coverage-filter src --coverage-html build/coverage/html
-
-      - name: Run mutation tests 🧬
-        run: |
-          mkdir -p build/infection
-          vendor/bin/infection \
-            --threads=max \
-            --logger-github=true \
-            --logger-html=build/infection/index.html \
-            --logger-summary-json=build/infection/summary.json \
-            --logger-text=build/infection/infection.log
-
-      - name: Publish code coverage report 🔭
-        uses: actions/upload-artifact@v7
-        if: always()
+      - name: Cache Composer downloads
+        uses: actions/cache@v5
         with:
-          name: code-coverage-html
-          path: build/coverage/html
-          if-no-files-found: error
+          path: ~/.composer/cache/files
+          key: composer-${{ runner.os }}-${{ steps.php.outputs.php-version }}-${{ hashFiles('composer.json') }}
 
-      - name: Publish mutation testing report 🔭
-        uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: mutation-testing-report
-          path: build/infection
-          if-no-files-found: error
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
 
-      - name: Add reports to job summary
-        if: always()
+      - name: Run PHPUnit with coverage
+        run: vendor/bin/phpunit --coverage-clover=build/coverage.xml --coverage-html=build/coverage-html --coverage-text --colors=never
+
+      - name: Check coverage and write summary
         run: |
-          {
-            echo "## Test reports"
-            echo
-            echo "- Code coverage HTML report: download the \`code-coverage-html\` artifact from this workflow run."
-            echo "- Mutation testing HTML report: download the \`mutation-testing-report\` artifact and open \`index.html\`."
-          } >> "$GITHUB_STEP_SUMMARY"
+          php <<'PHP'
+          <?php
+          $xml = simplexml_load_file('build/coverage.xml');
+          if ($xml === false || !isset($xml->project->metrics)) {
+              fwrite(STDERR, "Cannot read coverage metrics.\n");
+              exit(1);
+          }
+          $total = (int) $xml->project->metrics['statements'];
+          $covered = (int) $xml->project->metrics['coveredstatements'];
+          if ($total <= 0) {
+              fwrite(STDERR, "Coverage contains no statements.\n");
+              exit(1);
+          }
+          $percent = 100 * $covered / $total;
+          file_put_contents(getenv('GITHUB_STEP_SUMMARY'), sprintf(
+              "## Code coverage\n\nStatements: **%.2f%%**. Minimum: **80%%**.\n", $percent
+          ), FILE_APPEND);
+          exit($percent >= 80 ? 0 : 1);
+          PHP
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: |
+            build/coverage.xml
+            build/coverage-html
+          if-no-files-found: warn

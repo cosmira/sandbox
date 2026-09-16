@@ -10,11 +10,23 @@ use Illuminate\Database\ConnectionInterface;
 /** Model selections owned by one scoped application context. */
 final class TableContext
 {
-    /** @var array<class-string, bool> */
+    /**
+     * Per-model draft selections owned by this application scope.
+     *
+     * @var array<class-string, bool>
+     */
     private array $drafts = [];
 
+    /**
+     * Bind the registry used to resolve registered pivot tables.
+     *
+     * @param SandboxModelRegistry $registry Application model and table registry.
+     */
     public function __construct(private readonly SandboxModelRegistry $registry) {}
 
+    /**
+     * Resolve a registered active or draft table, returning null for unknown tables.
+     */
     public function resolveTable(
         string $table,
         ConnectionInterface $connection,
@@ -23,13 +35,21 @@ final class TableContext
         return $this->registry->resolveTable($table, $connection, $draft);
     }
 
-    /** @param class-string $model */
+    /**
+     * Set the table selection for a model within this application scope.
+     *
+     * @param class-string $model
+     */
     public function select(string $model, bool $draft): void
     {
         $this->drafts[$model] = $draft;
     }
 
-    /** @param class-string $model */
+    /**
+     * Return whether this scope selects the model draft; active is the default.
+     *
+     * @param class-string $model
+     */
     public function isUsingSandbox(string $model): bool
     {
         return $this->drafts[$model] ?? false;

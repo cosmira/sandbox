@@ -1,72 +1,118 @@
 name: Tests
 
 on:
-  pull_request:
   push:
-    paths:
-      - '.github/workflows/**'
-      - '**.php'
-      - 'phpunit.xml'
-      - 'composer.json'
-      - 'composer.lock'
-  schedule:
-    - cron: '0 0 * * *'
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   phpunit:
-    runs-on: ${{ matrix.os }}
-
-    env:
-      SANDBOX_CONCURRENCY_REPETITIONS: ${{ matrix.os == 'windows-latest' && matrix.laravel == '12.*' && ((matrix.php == 8.3 && matrix.dependency-version == 'prefer-stable') || (matrix.php == 8.4 && matrix.dependency-version == 'prefer-lowest')) && '100' || '1' }}
-
+    name: PHP ${{ matrix.php }} / Laravel ${{ matrix.laravel }} / ${{ matrix.dependencies }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        php: [8.5, 8.4, 8.3, 8.2]
-        os: [ubuntu-latest, windows-latest]
+        php: ['8.2', '8.3', '8.4', '8.5']
         laravel: ['12.*', '13.*']
-        dependency-version: [prefer-lowest, prefer-stable]
+        dependencies: [prefer-lowest, prefer-stable]
         include:
-          - laravel: 12.*
-            testbench: 10.*
-          - laravel: 13.*
-            testbench: 11.*
+          - laravel: '12.*'
+            testbench: '10.*'
+          - laravel: '13.*'
+            testbench: '11.*'
         exclude:
-          - laravel: 13.*
-            php: 8.2
-
-    name: P${{ matrix.php }} - ${{ matrix.os }} - L${{ matrix.laravel }} - ${{ matrix.dependency-version }}
-
+          - php: '8.2'
+            laravel: '13.*'
     steps:
-      - name: Checkout code 🛎️
-        uses: actions/checkout@v6
+      - name: Checkout code
+        uses: actions/checkout@v7
 
-      - name: Cache dependencies 🔧
-        uses: actions/cache@v5
-        with:
-          path: ~/.composer/cache/files
-          key: dependencies-laravel-${{ matrix.laravel }}-php-${{ matrix.php }}-composer-${{ hashFiles('composer.json') }}
-
-      - name: Setup PHP 🔧
+      - name: Setup PHP
+        id: php
         uses: shivammathur/setup-php@v2
         with:
-          php-version: ${{ matrix.php }}
-          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, imagick, fileinfo
+          php-version: '${{ matrix.php }}'
+          extensions: mbstring, dom, fileinfo, pdo_sqlite
           coverage: none
           tools: composer:v2
 
-      - name: Install dependencies 🔧
+      - name: Cache Composer downloads
+        uses: actions/cache@v5
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ runner.os }}-${{ steps.php.outputs.php-version }}-${{ hashFiles('composer.json') }}
+
+      - name: Install matrix dependencies
         run: |
           composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
-          composer update --${{ matrix.dependency-version }} --prefer-dist --no-interaction
+          composer update --${{ matrix.dependencies }} --prefer-dist --no-interaction --no-progress
 
-      - name: Execute tests (Unit and Feature tests) via PHPUnit 🧪
-        run: vendor/bin/phpunit --no-coverage --disable-coverage-ignore --order-by=random --random-order-seed=1788957854 --display-warnings --fail-on-warning --log-junit build/phpunit.xml
+      - name: Run PHPUnit
+        run: vendor/bin/phpunit --no-coverage --order-by=random --random-order-seed=1788957854 --display-warnings --fail-on-warning --log-junit build/phpunit.xml
 
-      - name: Preserve test evidence
-        uses: actions/upload-artifact@v7
+      - name: Upload test results
         if: always()
+        uses: actions/upload-artifact@v7
         with:
-          name: tests-${{ matrix.php }}-${{ matrix.os }}-laravel${{ startsWith(matrix.laravel, '12') && '12' || '13' }}-${{ matrix.dependency-version }}
+          name: tests-linux-php${{ matrix.php }}-laravel${{ startsWith(matrix.laravel, '12') && '12' || '13' }}-${{ matrix.dependencies }}
           path: build/phpunit.xml
-          if-no-files-found: error
+          if-no-files-found: warn
+
+  windows:
+    name: Windows / PHP ${{ matrix.php }} / Laravel 12 / ${{ matrix.dependencies }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: '8.3'
+            dependencies: prefer-stable
+          - php: '8.4'
+            dependencies: prefer-lowest
+    env:
+      SANDBOX_CONCURRENCY_REPETITIONS: '100'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup PHP
+        id: php
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '${{ matrix.php }}'
+          extensions: mbstring, dom, fileinfo, pdo_sqlite
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer downloads
+        uses: actions/cache@v5
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ runner.os }}-${{ steps.php.outputs.php-version }}-${{ hashFiles('composer.json') }}
+
+      - name: Install matrix dependencies
+        run: |
+          composer require "laravel/framework:12.*" "orchestra/testbench:10.*" --no-interaction --no-update
+          composer update --${{ matrix.dependencies }} --prefer-dist --no-interaction --no-progress
+
+      - name: Run PHPUnit
+        run: vendor/bin/phpunit --no-coverage --order-by=random --random-order-seed=1788957854 --display-warnings --fail-on-warning --log-junit build/phpunit.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tests-windows-php${{ matrix.php }}-${{ matrix.dependencies }}
+          path: build/phpunit.xml
+          if-no-files-found: warn

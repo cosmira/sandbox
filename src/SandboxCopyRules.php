@@ -31,7 +31,11 @@ final readonly class SandboxCopyRules
         $this->validateColumns($updateColumns ?? []);
     }
 
-    /** @param array<array-key, mixed> $columns */
+    /**
+     * Reject duplicate, empty or non-string update-column names.
+     *
+     * @param array<array-key, mixed> $columns
+     */
     private function validateColumns(array $columns): void
     {
         $uniqueColumns = array_unique($columns);

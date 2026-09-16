@@ -22,19 +22,36 @@ class SandboxModelRegistry
      */
     private array $models = [];
 
-    /** @var array<string, SandboxTable> */
+    /**
+     * Registered table definitions indexed by their active table name.
+     *
+     * @var array<string, SandboxTable>
+     */
     private array $tables = [];
 
-    /** @var list<class-string<Model>|SandboxTable> */
+    /**
+     * Models and table definitions in the dependency order supplied by the host.
+     *
+     * @var list<class-string<Model>|SandboxTable>
+     */
     private array $resources = [];
 
+    /**
+     * Shared connection used by registered table definitions.
+     */
     private ?ConnectionInterface $tableConnection = null;
 
+    /**
+     * Create the stack that restores selections after nested operations.
+     */
     public function __construct()
     {
         $this->scope = new SelectionScope();
     }
 
+    /**
+     * Register table definitions in order, rejecting overlaps and mixed connections.
+     */
     public function registerTables(ConnectionInterface $connection, SandboxTable ...$tables): void
     {
         $this->ensureTableConnection($connection);
@@ -54,6 +71,9 @@ class SandboxModelRegistry
         }
     }
 
+    /**
+     * Reject a connection different from the registered table connection.
+     */
     public function ensureTableConnection(ConnectionInterface $connection): void
     {
         throw_if(
@@ -64,7 +84,9 @@ class SandboxModelRegistry
         );
     }
 
-    /** Return null for a table outside the explicitly registered table set. */
+    /**
+     * Return null for a table outside the explicitly registered table set.
+     */
     public function resolveTable(
         string $name,
         ConnectionInterface $connection,
@@ -91,6 +113,9 @@ class SandboxModelRegistry
         return $this->models;
     }
 
+    /**
+     * Selection frames and connection constraints for nested registry operations.
+     */
     private readonly SelectionScope $scope;
 
     /**
@@ -110,6 +135,9 @@ class SandboxModelRegistry
         );
     }
 
+    /**
+     * Require models discovered inside an edit to use its transaction connection.
+     */
     private function ensureConnection(string $model): void
     {
         if ($this->scope->connection === null) {
@@ -151,6 +179,9 @@ class SandboxModelRegistry
         );
     }
 
+    /**
+     * Reject model tables that overlap a table-only registration.
+     */
     private function ensureSeparateTable(string $model, SandboxTable $table): void
     {
         $instance = new $model();
@@ -161,6 +192,9 @@ class SandboxModelRegistry
         $table->ensureSeparateModel($instance->getActiveTable(), $instance->getSandboxTable());
     }
 
+    /**
+     * Select tables for the callback and restore all remembered models afterward.
+     */
     public function usingTables(
         bool $draft,
         callable $callback,
@@ -294,6 +328,9 @@ class SandboxModelRegistry
         }
     }
 
+    /**
+     * Require every registered resource to use the lifecycle connection.
+     */
     public function ensureAllConnections(ConnectionInterface $connection): void
     {
         $this->ensureTableConnection($connection);
@@ -302,6 +339,9 @@ class SandboxModelRegistry
         }
     }
 
+    /**
+     * Reject a model whose connection differs from the lifecycle connection.
+     */
     public function ensureModelConnection(Model $model, ConnectionInterface $connection): void
     {
         throw_unless(

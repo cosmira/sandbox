@@ -126,12 +126,26 @@ composer install
 composer test
 composer test:coverage
 composer test:mutation
+composer test:types
+composer test:rector
 npx --yes markdownlint-cli2@0.23.2
 ```
 
-CI runs the PHP/Laravel matrix, PostgreSQL and MySQL contracts, coding style,
-mutation testing, spelling, ShellCheck, and Markdown validation. Infection
-requires at least 96% MSI and covered MSI.
+CI runs the PHP/Laravel matrix on Ubuntu and dedicated Windows concurrency checks,
+plus PostgreSQL and MySQL contracts. Separate workflows check Composer metadata,
+PHPStan, Rector, Soda, coverage, mutations, spelling, ShellCheck, and Markdown.
+Pint commits formatting fixes on pushes and checks pull requests.
+Statement coverage must reach 80%; Infection requires 96% MSI and covered MSI.
+
+`soda.php` combines Soda's standard rules with multiline PHPDoc checks for all
+methods, properties, and constants in `src`, regardless of visibility. Promoted
+properties can be documented with a matching constructor `@param` tag.
+CI installs Soda separately so Sandbox keeps supporting PHP 8.2. With a local
+[Soda checkout](https://github.com/cosmira/soda), run:
+
+```bash
+php /path/to/soda/soda quality src --config=soda.php
+```
 
 ## Limitations
 

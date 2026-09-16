@@ -39,11 +39,17 @@ class Sandbox
      */
     private readonly SandboxModelRegistry $models;
 
+    /**
+     * Bind fluent lifecycle operations to the given user identifier.
+     */
     public function for(int|string $userId): SandboxBuilder
     {
         return new SandboxBuilder($userId, $this);
     }
 
+    /**
+     * Bind operations to the authenticated user; fail when no user is authenticated.
+     */
     public function me(): SandboxBuilder
     {
         $user = auth()->guard()->user();
@@ -66,19 +72,30 @@ class Sandbox
         $this->models->register(...$models);
     }
 
-    /** Register tables without requiring application Pivot model classes. */
+    /**
+     * Register tables without requiring application Pivot model classes.
+     */
     public function tables(SandboxTable ...$tables): void
     {
         $this->models->registerTables($this->connection(), ...$tables);
     }
 
+    /**
+     * Backend that owns lifecycle locking, transactions and status persistence.
+     */
     private readonly SandboxBackend $backend;
 
+    /**
+     * Return the connection used for lifecycle locks and data changes.
+     */
     public function connection(): ConnectionInterface
     {
         return $this->backend->connection();
     }
 
+    /**
+     * Open or resume the draft and acquire ownership for the given user.
+     */
     public function open(
         int|string|Model $user,
         bool $force = false,
@@ -87,16 +104,25 @@ class Sandbox
         $this->backend->open($this->userId($user), $force, $note);
     }
 
+    /**
+     * Publish draft data and release the editing lock.
+     */
     public function commit(int|string|Model $user, ?string $note = null): void
     {
         $this->backend->commit($this->userId($user), $note);
     }
 
+    /**
+     * Restore the draft from active data and release the editing lock.
+     */
     public function rollback(int|string|Model $user, ?string $note = null): void
     {
         $this->backend->rollback($this->userId($user), $note);
     }
 
+    /**
+     * Keep draft changes for later and release the editing lock.
+     */
     public function save(int|string|Model $user, ?string $note = null): void
     {
         $this->backend->save($this->userId($user), $note);
@@ -123,11 +149,17 @@ class Sandbox
         return $key;
     }
 
+    /**
+     * Return the shared editing status, or null when no status row exists.
+     */
     public function status(): ?SandboxStatus
     {
         return $this->backend->status();
     }
 
+    /**
+     * Open the draft and execute the callback in one transaction and table scope.
+     */
     public function edit(int|string|Model $user, callable $callback): mixed
     {
         return $this->connection()->transaction(function () use ($user, $callback): mixed {

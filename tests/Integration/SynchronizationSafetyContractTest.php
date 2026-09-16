@@ -99,7 +99,6 @@ final class SynchronizationSafetyContractTest extends TestCase
                 changeColumn: null,
                 sourceAlias: 'source',
                 targetAlias: 'target',
-                parentColumn: null,
             );
             $this->assertSame('explicit connection', $connection->table('sync_contract_sb')->value('value'));
             $this->assertFalse(DB::connection()->getSchemaBuilder()->hasTable('sync_contract_sb'));
@@ -150,7 +149,6 @@ final class SynchronizationSafetyContractTest extends TestCase
                 changeColumn: null,
                 sourceAlias: 'source',
                 targetAlias: 'target',
-                parentColumn: null,
             );
             $actual = DB::table('composite_sync_sb')->orderBy('tenant')->orderBy('sequence')->get()
                 ->map(fn (object $row): array => (array) $row)->all();
@@ -216,7 +214,6 @@ final class SynchronizationSafetyContractTest extends TestCase
             changeColumn: $changeColumn,
             sourceAlias: 'source',
             targetAlias: 'target',
-            parentColumn: null,
         );
     }
 }

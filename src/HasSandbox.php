@@ -16,6 +16,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  */
 trait HasSandbox
 {
+    /**
+     * Build a relation that follows the selected model and registered pivot tables.
+     */
     protected function newBelongsToMany(
         Builder $query,
         Model $parent,
@@ -69,10 +72,19 @@ trait HasSandbox
         return static::$sandboxTrackChangeColumn;
     }
 
+    /**
+     * Physical active table cached before aliases or draft names are assigned.
+     */
     private ?string $sandboxActiveTable = null;
 
+    /**
+     * Explicit table or alias assigned to this model instance.
+     */
     private ?string $sandboxResolvedTable = null;
 
+    /**
+     * Selection captured on the instance, preserved when a self-join adds an alias.
+     */
     private ?bool $sandboxResolvedDraft = null;
 
     /**
@@ -83,6 +95,9 @@ trait HasSandbox
         return $this->sandboxActiveTable ??= parent::getTable();
     }
 
+    /**
+     * Assign a physical table or alias while preserving the instance selection.
+     */
     public function setTable(mixed $table): static
     {
         $this->sandboxResolvedDraft = match ($table) {
@@ -103,7 +118,9 @@ trait HasSandbox
         return $this->getActiveTable().$this->getSandboxTablePostfix();
     }
 
-    /** Preserve the selected layer when Eloquent assigns a self-join alias. */
+    /**
+     * Preserve the selected layer when Eloquent assigns a self-join alias.
+     */
     public function isUsingSandboxTable(): bool
     {
         return $this->sandboxResolvedDraft ?? static::isUsingSandbox();

@@ -16,6 +16,9 @@ use Illuminate\Support\Facades\Facade;
  */
 final class Context extends Facade
 {
+    /**
+     * Resolve table selections from the current application scope.
+     */
     protected static function getFacadeAccessor(): string
     {
         return TableContext::class;

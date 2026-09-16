@@ -12,6 +12,11 @@ use Illuminate\Database\Eloquent\Model;
  */
 class SandboxBuilder
 {
+    /**
+     * Bind a user to the supplied service or the application default.
+     *
+     * @param int|string $userId User identifier bound to all fluent lifecycle operations.
+     */
     public function __construct(
         private readonly int|string $userId,
         ?Sandbox $sandbox = null,
@@ -19,6 +24,9 @@ class SandboxBuilder
         $this->sandbox = $sandbox ?? app(Sandbox::class);
     }
 
+    /**
+     * Service instance retained by every operation in this fluent builder.
+     */
     private readonly Sandbox $sandbox;
 
     /**

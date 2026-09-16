@@ -18,16 +18,28 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class SandboxMiddleware
 {
+    /**
+     * Registry responsible for restoring model selections around each request.
+     */
     private readonly SandboxModelRegistry $models;
 
+    /**
+     * Lifecycle service used to authorize ownership and transact draft edits.
+     */
     private readonly Sandbox $sandbox;
 
+    /**
+     * Use supplied services or resolve the application defaults.
+     */
     public function __construct(?SandboxModelRegistry $models = null, ?Sandbox $sandbox = null)
     {
         $this->models = $models ?? app(SandboxModelRegistry::class);
         $this->sandbox = $sandbox ?? app(Sandbox::class);
     }
 
+    /**
+     * Scope reads and transact edits, rolling back rejected HTTP responses.
+     */
     public function handle(Request $request, Closure $next): mixed
     {
         $user = $request->user()?->getAuthIdentifier();
@@ -67,6 +79,9 @@ class SandboxMiddleware
         }
     }
 
+    /**
+     * Select request tables and discover extra draft models before dispatch.
+     */
     private function resolve(Request $request, Closure $next, bool $draft): mixed
     {
         return $this->models->usingTables($draft, function () use ($request, $next, $draft): mixed {
@@ -79,5 +94,8 @@ class SandboxMiddleware
         });
     }
 
+    /**
+     * Retain the middleware hook; request table state is restored inside handle().
+     */
     public function terminate(Request $request, mixed $response): void {}
 }

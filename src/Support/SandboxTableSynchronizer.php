@@ -17,8 +17,14 @@ use InvalidArgumentException;
  */
 class SandboxTableSynchronizer
 {
+    /**
+     * Connection on which all copy queries and transactions execute.
+     */
     private readonly ConnectionInterface $connection;
 
+    /**
+     * Use the supplied copy connection or the application default.
+     */
     public function __construct(?ConnectionInterface $connection = null)
     {
         $this->connection = $connection ?? DB::connection();

@@ -10,15 +10,30 @@ use Illuminate\Database\Eloquent\Model;
 /** Nestable operation state, including models discovered during the callback. */
 final class SelectionScope
 {
-    /** @var list<class-string<Model>> */
+    /**
+     * Models selected through the registry during the current operation.
+     *
+     * @var list<class-string<Model>>
+     */
     public array $switched = [];
 
-    /** @var list<SelectionFrame> */
+    /**
+     * Snapshots restored as nested table-selection operations finish.
+     *
+     * @var list<SelectionFrame>
+     */
     private array $frames = [];
 
+    /**
+     * Connection required by the current edit, inherited by nested operations.
+     */
     public ?ConnectionInterface $connection = null;
 
-    /** @param class-string<Model> $model */
+    /**
+     * Record a model in the innermost active selection frame.
+     *
+     * @param class-string<Model> $model
+     */
     public function remember(string $model): void
     {
         $frame = end($this->frames);
@@ -27,6 +42,9 @@ final class SelectionScope
         }
     }
 
+    /**
+     * Run a nested operation and restore selections and connection even on failure.
+     */
     public function run(?ConnectionInterface $connection, callable $callback): mixed
     {
         $previousSwitched = $this->switched;

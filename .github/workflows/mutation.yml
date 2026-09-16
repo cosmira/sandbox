@@ -1,4 +1,4 @@
-name: Coding Guidelines
+name: Mutation Testing
 
 on:
   push:
@@ -11,16 +11,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: style-${{ github.workflow }}-${{ github.ref }}
+  group: mutation-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  pint:
-    name: Pint
+  infection:
+    name: Infection
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: write
+    timeout-minutes: 30
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -31,7 +29,7 @@ jobs:
         with:
           php-version: '8.4'
           extensions: mbstring, dom, fileinfo, pdo_sqlite
-          coverage: none
+          coverage: pcov
           tools: composer:v2
 
       - name: Cache Composer downloads
@@ -43,17 +41,20 @@ jobs:
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
-      - name: Check pull request style
-        if: github.event_name == 'pull_request'
-        run: vendor/bin/pint --test
+      - name: Run mutation tests
+        run: |
+          mkdir -p build/infection
+          vendor/bin/infection \
+            --threads=4 \
+            --logger-github=true \
+            --logger-html=build/infection/index.html \
+            --logger-summary-json=build/infection/summary.json \
+            --logger-text=build/infection/infection.log
 
-      - name: Fix code style
-        if: github.event_name != 'pull_request'
-        run: vendor/bin/pint
-
-      - name: Commit code style fixes
-        if: github.event_name != 'pull_request'
-        uses: stefanzweifel/git-auto-commit-action@v7
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v7
         with:
-          commit_message: 'style: apply Pint fixes'
-          file_pattern: '*.php'
+          name: mutation-testing-report
+          path: build/infection
+          if-no-files-found: warn

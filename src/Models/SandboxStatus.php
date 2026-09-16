@@ -86,6 +86,9 @@ class SandboxStatus extends Model
         return config('sandbox.table', 'sandbox_status');
     }
 
+    /**
+     * Return the configured status key, or null for a host-provisioned singleton.
+     */
     public function getKeyName(): ?string
     {
         return config('sandbox.status_primary_key', $this->primaryKey);
@@ -106,6 +109,9 @@ class SandboxStatus extends Model
         return $rows->first();
     }
 
+    /**
+     * Constrain keyed updates or verify and lock the sole keyless status row.
+     */
     protected function setKeysForSaveQuery(mixed $query)
     {
         if ($this->getKeyName() !== null) {
@@ -117,6 +123,9 @@ class SandboxStatus extends Model
         return $query;
     }
 
+    /**
+     * Constrain keyed reads or verify that the keyless status table has one row.
+     */
     protected function setKeysForSelectQuery(mixed $query)
     {
         if ($this->getKeyName() !== null) {

@@ -92,8 +92,6 @@ class BenchmarkSyncCommand extends Command
 
     /**
      * Define the benchmark table schema.
-     *
-     * @param Blueprint $table
      */
     protected function defineSchema(Blueprint $table): void
     {

@@ -1,20 +1,23 @@
 name: Markdown
-'on':
+
+on:
   push:
-    branches:
-      - master
+    branches: [master]
   pull_request:
-    branches:
-      - master
-concurrency:
-  group: markdown-${{ github.ref }}
-  cancel-in-progress: true
+    branches: [master]
+  workflow_dispatch:
+
 permissions:
   contents: read
+
+concurrency:
+  group: markdown-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   markdown:
-    timeout-minutes: 15
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: DavidAnson/markdownlint-cli2-action@v24.2.0

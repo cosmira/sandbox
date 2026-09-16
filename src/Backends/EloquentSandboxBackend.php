@@ -29,12 +29,22 @@ use Illuminate\Support\Facades\Log;
  */
 class EloquentSandboxBackend implements SandboxBackend
 {
+    /**
+     * Bind the registered resources, record restorer and shared status model.
+     *
+     * @param SandboxModelRegistry  $models         Registered lifecycle resources.
+     * @param SandboxRecordRestorer $recordRestorer Copies active values back into one draft record.
+     * @param SandboxStatus         $statusModel    Shared lock and lifecycle state.
+     */
     public function __construct(
         private readonly SandboxModelRegistry $models,
         private readonly SandboxRecordRestorer $recordRestorer = new SandboxRecordRestorer(),
         private readonly SandboxStatus $statusModel = new SandboxStatus(),
     ) {}
 
+    /**
+     * Return the connection used for lifecycle locks and data changes.
+     */
     public function connection(): ConnectionInterface
     {
         return $this->statusModel->getConnection();
@@ -89,7 +99,9 @@ class EloquentSandboxBackend implements SandboxBackend
         });
     }
 
-    /** Customize shared-draft preparation while retaining the package's opening lifecycle. */
+    /**
+     * Customize shared-draft preparation while retaining the package's opening lifecycle.
+     */
     protected function initializeDraft(): void
     {
         $this->models->resetSandbox();
@@ -166,6 +178,9 @@ class EloquentSandboxBackend implements SandboxBackend
         });
     }
 
+    /**
+     * Reject mutations unless the draft is locked by the requested user.
+     */
     private function ensureLockedBy(SandboxStatus $status, int|string $userId): void
     {
         throw_unless(

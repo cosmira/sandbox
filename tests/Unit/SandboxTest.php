@@ -170,7 +170,7 @@ final class SandboxTest extends TestCase
         Event::assertDispatched(SandboxResetting::class);
         Event::assertDispatched(SandboxOpened::class, function (SandboxOpened $event) {
             return $event->userId === 1
-                && $event->force === true
+                && $event->force
                 && $event->note === 'Forced open';
         });
         $status = SandboxStatus::first();

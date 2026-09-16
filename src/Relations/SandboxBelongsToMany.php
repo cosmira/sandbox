@@ -39,6 +39,9 @@ class SandboxBelongsToMany extends BelongsToMany
         );
     }
 
+    /**
+     * Select a registered pivot table and align the related model with its parent.
+     */
     protected function resolveTableName(mixed $table): string
     {
         $table = parent::resolveTableName($table);

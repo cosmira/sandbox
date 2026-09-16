@@ -12,11 +12,10 @@ use Cosmira\Sandbox\Models\SandboxStatus;
 use Cosmira\Sandbox\Sandbox;
 use Cosmira\Sandbox\Tests\TestCase;
 use Illuminate\Support\Facades\Event;
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\Test;
 
-/**
- * @group commands
- */
+#[Group('commands')]
 final class CommandsTest extends TestCase
 {
     protected function setUp(): void

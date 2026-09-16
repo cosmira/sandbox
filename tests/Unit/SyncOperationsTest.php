@@ -856,7 +856,6 @@ final class SyncOperationsTest extends TestCase
             changeColumn: null,
             sourceAlias: 'source',
             targetAlias: 'target',
-            parentColumn: null,
         );
 
         $row = DB::table('items_sb')->where('id', 10)->first();
@@ -888,7 +887,6 @@ final class SyncOperationsTest extends TestCase
             changeColumn: null,
             sourceAlias: 'source',
             targetAlias: 'target',
-            parentColumn: null,
         );
 
         $this->assertSame(0, DB::table('items_sb')->count());
@@ -922,7 +920,6 @@ final class SyncOperationsTest extends TestCase
             changeColumn: null,
             sourceAlias: 'source',
             targetAlias: 'target',
-            parentColumn: null,
         );
 
         $this->assertSame(501, DB::table('items_sb')->count());
