@@ -834,6 +834,63 @@ final class SyncOperationsTest extends TestCase
     }
 
     #[Test]
+    #[DataProvider('generatedColumnCopies')]
+    public function automaticSynchronizationLeavesGeneratedColumnsToTheDatabase(
+        bool $throughModel,
+        string $operation,
+        string $source,
+        string $target,
+    ): void {
+        $driver = DB::connection()->getDriverName();
+        foreach (['items', 'items_sb'] as $table) {
+            Schema::table($table, static function (Blueprint $blueprint) use ($driver): void {
+                $column = $blueprint->integer('doubled_value');
+                if ($driver === 'pgsql') {
+                    $column->storedAs('value * 2');
+                } else {
+                    $column->virtualAs('value * 2');
+                }
+            });
+        }
+        $now = now();
+        DB::table($source)->insert([
+            ['id' => 10, 'name' => 'changed', 'value' => 42, 'created_at' => $now, 'updated_at' => $now],
+            ['id' => 20, 'name' => 'added', 'value' => 50, 'created_at' => $now, 'updated_at' => $now],
+        ]);
+        DB::table($target)->insert([
+            ['id' => 10, 'name' => 'stale', 'value' => 1, 'created_at' => $now, 'updated_at' => $now],
+            ['id' => 30, 'name' => 'removed', 'value' => 2, 'created_at' => $now, 'updated_at' => $now],
+        ]);
+
+        if ($throughModel) {
+            SimpleModelStub::{$operation}();
+        } else {
+            (new SandboxTableSynchronizer())->sync(
+                sourceTable: $source,
+                targetTable: $target,
+                keyColumns: ['id'],
+                columns: [],
+                changeColumn: null,
+            );
+        }
+
+        $this->assertSame([10 => 84, 20 => 100], DB::table($target)
+            ->orderBy('id')->pluck('doubled_value', 'id')->all());
+        $this->assertSame([10 => 'changed', 20 => 'added'], DB::table($target)
+            ->orderBy('id')->pluck('name', 'id')->all());
+    }
+
+    public static function generatedColumnCopies(): array
+    {
+        return [
+            'model reset' => [true, 'resetSandbox', 'items', 'items_sb'],
+            'model apply' => [true, 'applySandbox', 'items_sb', 'items'],
+            'table reset' => [false, 'resetSandbox', 'items', 'items_sb'],
+            'table apply' => [false, 'applySandbox', 'items_sb', 'items'],
+        ];
+    }
+
+    #[Test]
     public function synchronizerUsesSchemaColumnsWhenColumnsAreNotProvided(): void
     {
         DB::table('items')->insert([
@@ -868,7 +925,7 @@ final class SyncOperationsTest extends TestCase
     public function synchronizerSkipsInsertionWhenNoColumnsCanBeResolved(): void
     {
         $schema = \Mockery::mock(Builder::class);
-        $schema->shouldReceive('getColumnListing')
+        $schema->shouldReceive('getColumns')
             ->once()
             ->with('items')
             ->andReturn([]);
