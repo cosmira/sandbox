@@ -18,6 +18,22 @@ final class SandboxColumns
      */
     public static function writable(Builder $schema, string $table): array
     {
+        $connection = $schema->getConnection();
+        if ($connection->getDriverName() === 'oracle') {
+            [$owner, $table] = $schema->parseSchemaAndTable($table);
+            $columns = $connection->selectFromWriteConnection(
+                'select lower(column_name) as name from all_tab_cols '
+                .'where owner = ? and table_name = ? '
+                ."and hidden_column = 'NO' and virtual_column = 'NO' order by column_id",
+                [
+                    strtoupper($owner ?? $connection->getConfig('username')),
+                    strtoupper($connection->getTablePrefix().$table),
+                ],
+            );
+
+            return array_column($columns, 'name');
+        }
+
         $columns = array_filter(
             $schema->getColumns($table),
             static fn (array $column): bool => ($column['generation'] ?? null) === null,

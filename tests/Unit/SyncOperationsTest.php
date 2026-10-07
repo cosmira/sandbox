@@ -851,6 +851,9 @@ final class SyncOperationsTest extends TestCase
                     $column->virtualAs('value * 2');
                 }
             });
+            if ($driver === 'oracle') {
+                DB::statement('create index '.$table.'_name_lower on '.$table.' (lower(name))');
+            }
         }
         $now = now();
         DB::table($source)->insert([
@@ -888,6 +891,24 @@ final class SyncOperationsTest extends TestCase
             'table reset' => [false, 'resetSandbox', 'items', 'items_sb'],
             'table apply' => [false, 'applySandbox', 'items_sb', 'items'],
         ];
+    }
+
+    #[Test]
+    public function reusedSynchronizerDiscoversSchemaChangesBetweenOperations(): void
+    {
+        DB::table('items')->insert(['id' => 10, 'name' => 'original', 'value' => 1]);
+        $synchronizer = new SandboxTableSynchronizer();
+        $synchronizer->sync('items', 'items_sb', ['id'], [], null);
+
+        foreach (['items', 'items_sb'] as $table) {
+            Schema::table($table, static function (Blueprint $blueprint): void {
+                $blueprint->string('added')->nullable();
+            });
+        }
+        DB::table('items')->where('id', 10)->update(['added' => 'fresh schema']);
+        $synchronizer->sync('items', 'items_sb', ['id'], [], null);
+
+        $this->assertSame('fresh schema', DB::table('items_sb')->where('id', 10)->value('added'));
     }
 
     #[Test]
@@ -931,6 +952,8 @@ final class SyncOperationsTest extends TestCase
             ->andReturn([]);
 
         $connection = \Mockery::mock(DB::connection());
+        $connection->shouldReceive('getDriverName')->once()->andReturn('sqlite');
+        $schema->shouldReceive('getConnection')->once()->andReturn($connection);
         $connection->shouldReceive('getSchemaBuilder')->once()->andReturn($schema);
         $connection->shouldNotReceive('transaction');
         $connection->shouldNotReceive('table');
