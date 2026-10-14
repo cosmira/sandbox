@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0 - 2026-10-15
+
+### Added
+
+- `SandboxBelongsToMany::syncAcrossCopies()` applies a selected relation delta
+  to active and draft copies without changing sandbox ownership or lifecycle,
+  and returns affected parent copies for host timestamps and audit.
+
 ## 1.0.0 - 2026-09-16
 
 ### Changed
@@ -14,10 +22,6 @@
   see [compatibility notes](docs/upgrading.md).
 
 ### Added
-
-- `SandboxBelongsToMany::syncAcrossCopies()` applies a selected relation delta
-  to active and draft copies without changing sandbox ownership or lifecycle,
-  and returns affected parent copies for host timestamps and audit.
 
 - PHPStan and Rector run locally through `composer test:types` and
   `composer test:rector`, and in GitHub Actions.
