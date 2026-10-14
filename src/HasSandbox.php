@@ -6,6 +6,7 @@ namespace Cosmira\Sandbox;
 
 use Cosmira\Sandbox\Eloquent\Context;
 use Cosmira\Sandbox\Relations\SandboxBelongsToMany;
+use Cosmira\Sandbox\Support\SandboxColumns;
 use Cosmira\Sandbox\Support\SandboxTableSynchronizer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -348,7 +349,8 @@ trait HasSandbox
     protected function getSandboxSyncColumns(): array
     {
         return static::$sandboxSyncColumns
-            ?? $this->getConnection()->getSchemaBuilder()->getColumnListing(
+            ?? SandboxColumns::writable(
+                $this->getConnection()->getSchemaBuilder(),
                 $this->getActiveTable(),
             );
     }

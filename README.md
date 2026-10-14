@@ -18,8 +18,6 @@ shared configuration.
 - SQLite, PostgreSQL, or MySQL.
 - An active table and a matching draft table for each registered model or table.
 
-See [upgrading from 0.1.0](docs/upgrading.md) when updating an existing integration.
-
 ## Installation
 
 ```bash

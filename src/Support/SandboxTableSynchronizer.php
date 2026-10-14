@@ -351,7 +351,7 @@ class SandboxTableSynchronizer
      */
     private function columnsFrom(string $table): array
     {
-        return $this->connection->getSchemaBuilder()->getColumnListing($table);
+        return SandboxColumns::writable($this->connection->getSchemaBuilder(), $table);
     }
 
     /**
