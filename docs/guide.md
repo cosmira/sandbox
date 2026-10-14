@@ -139,6 +139,72 @@ Sandbox::me()->rollback(note: 'Discard draft');
 Sandbox::me()->save(note: 'Continue tomorrow');
 ```
 
+## Updating A Relation Across Both Copies
+
+Use `syncAcrossCopies()` for direct relationship changes that must reach both active
+and draft data without opening a draft or changing its owner:
+
+```php
+$affected = $person->statuses()->syncAcrossCopies([
+    $statusId => ['note' => 'Review', 'change_date' => now()],
+]);
+```
+
+The method accepts an ID list or an ID-to-pivot-attributes map, like Eloquent's
+`sync()`. A closure may instead build that payload after both parent copies have
+been locked; it is evaluated exactly once inside the transaction:
+
+```php
+$affected = $person->statuses()->syncAcrossCopies(
+    fn () => [$statusId => ['change_date' => now()]],
+);
+```
+
+Both models must use `HasSandbox`, the pivot must be registered with
+`Sandbox::tables()`, and both models and the pivot must use the same connection.
+
+The removal set comes from the relation's currently selected copy. The same
+removals and requested assignments are then applied to both copies. Assignments
+that exist only in the other copy are preserved unless explicitly removed by
+that delta. An empty payload therefore clears the selected relation, not every
+assignment in both copies. Related records missing from a copy are skipped;
+missing parents are never created. Identity comparisons use raw database keys,
+so related-model casts and accessors cannot alter them. Eloquent global scopes
+still apply to the source relation and to related-record existence checks.
+
+The operation uses a transaction, locks parents in active-then-draft order, and
+locks requested related records before writing. Failure rolls back both copies;
+an enclosing host transaction can still roll back the operation. Sandbox state,
+ownership and the current table selection are unchanged. This is an explicit
+cross-copy write capability: the host must authorize it separately from ordinary
+draft editing and coordinate it with lifecycle operations when necessary.
+
+The result is a list of affected parent models, pinned to their own physical
+tables. A copy is affected when it has valid requested assignments or receives a
+nonempty removal delta, even if the SQL values do not change. A missing parent
+may be returned with `exists === false` when removals apply. The method does not
+touch parents or related models; timestamps, projections and audit belong to the
+host application and can be handled using this result within its transaction.
+
+Ordinary uniform pivot payloads use a batch upsert only when schema metadata
+confirms that the relation-key pair is the primary and sole unique identity.
+Other schemas (including auto-ID pivots without a unique pair) use Laravel's
+individual attachment/update methods. This also preserves additional uniqueness
+constraints rather than letting an upsert target another assignment. Custom
+Pivot classes retain Laravel casts and events; heterogeneous payloads and ID-only
+lists also use individual writes. Automatic pivot timestamps are
+supported and existing creation dates are preserved.
+
+Relation metadata (including custom Pivot classes, timestamp columns and runtime
+`using()`/`withTimestamps()` configuration) is retained for both copies. Relations
+with additional predicates or altered query shape (including `wherePivot*`,
+`withPivotValue`, related-query `where`, `select`, `limit`, joins or grouping)
+are rejected before writes. Ordering alone is allowed. A batch upsert must
+not overwrite assignments outside a filter or silently discard its constraints.
+Pivot attributes cannot override either identity column. Only integer/string IDs
+and array attribute maps are supported; collection/model inputs are not accepted
+by this method.
+
 ## The Configuration Workflow
 
 The package is designed around a single global configuration lock.

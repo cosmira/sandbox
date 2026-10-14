@@ -15,6 +15,10 @@
 
 ### Added
 
+- `SandboxBelongsToMany::syncAcrossCopies()` applies a selected relation delta
+  to active and draft copies without changing sandbox ownership or lifecycle,
+  and returns affected parent copies for host timestamps and audit.
+
 - PHPStan and Rector run locally through `composer test:types` and
   `composer test:rector`, and in GitHub Actions.
 - Soda checks standard quality rules and multiline PHPDoc for methods, properties,

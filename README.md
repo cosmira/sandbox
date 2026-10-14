@@ -113,6 +113,7 @@ events run after commit, so a listener failure cannot undo published data.
 - [Model registration](docs/guide.md#model-registration)
 - [Pivot tables, trees, and selective copying](docs/guide.md#pivot-tables-without-model-classes)
 - [Model options and explicit table scopes](docs/guide.md#working-with-models)
+- [Direct relation updates across both copies](docs/guide.md#updating-a-relation-across-both-copies)
 - [Synchronization](docs/guide.md#synchronization)
 - [Status and UI](docs/guide.md#status-and-ui)
 - [Events](docs/guide.md#events)
