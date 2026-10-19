@@ -170,6 +170,8 @@ class Sandbox
     }
 
     /**
+     * Read using the draft visible to the user, or the active tables.
+     *
      * @param callable(bool): mixed $callback Receives whether this read uses draft tables.
      */
     public function read(int|string|Model|null $user, callable $callback): mixed

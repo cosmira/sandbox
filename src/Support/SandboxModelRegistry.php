@@ -248,7 +248,8 @@ class SandboxModelRegistry
                 $this->ensureSeparateTable($model, $table);
             }
             if (! in_array($model, $this->models, true)
-                && (! method_exists($model, 'supportsSandboxSync') || $model::supportsSandboxSync())) {
+                && (! method_exists($model, 'supportsSandboxSync')
+                    || $model::supportsSandboxSync())) {
                 $this->resources[] = $model;
             }
 
@@ -263,9 +264,9 @@ class SandboxModelRegistry
      */
     public function useSandbox(string ...$models): void
     {
-        $models = $models === [] ? $this->all() : $models;
+        $selectedModels = $models === [] ? $this->all() : $models;
 
-        foreach ($models as $model) {
+        foreach ($selectedModels as $model) {
             $this->ensureCanUseSandboxTables($model);
             $this->ensureConnection($model);
 

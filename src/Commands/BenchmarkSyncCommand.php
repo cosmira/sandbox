@@ -115,7 +115,7 @@ class BenchmarkSyncCommand extends Command
      */
     protected function insertTestData(?string $table = null): void
     {
-        $table ??= $this->activeTable;
+        $targetTable = $table ?? $this->activeTable;
 
         $data = [];
         $now = now()->toDateTimeString();
@@ -130,12 +130,12 @@ class BenchmarkSyncCommand extends Command
 
             $batchIsFull = $index % 10_000 === 0;
             if ($batchIsFull) {
-                $this->bulkInsert($table, $data);
+                $this->bulkInsert($targetTable, $data);
                 $data = [];
             }
         }
 
-        $this->bulkInsert($table, $data);
+        $this->bulkInsert($targetTable, $data);
     }
 
     /**

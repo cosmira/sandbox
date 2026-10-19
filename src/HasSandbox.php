@@ -40,7 +40,7 @@ trait HasSandbox
     /**
      * Keep related sandbox models on the same copy as their parent instance.
      */
-    protected function newRelatedInstance($class)
+    protected function newRelatedInstance(mixed $class)
     {
         $instance = parent::newRelatedInstance($class);
 
@@ -52,7 +52,7 @@ trait HasSandbox
     /**
      * Keep the intermediate model of a through relation on the parent copy.
      */
-    protected function newRelatedThroughInstance($class)
+    protected function newRelatedThroughInstance(mixed $class)
     {
         $instance = parent::newRelatedThroughInstance($class);
         $this->inheritSandboxSelection($instance);
@@ -65,7 +65,8 @@ trait HasSandbox
      */
     private function inheritSandboxSelection(Model $instance): void
     {
-        if (method_exists($instance, 'getSandboxTable') && method_exists($instance, 'getActiveTable')) {
+        if (method_exists($instance, 'getSandboxTable')
+            && method_exists($instance, 'getActiveTable')) {
             $instance->setTable($this->isUsingSandboxTable()
                 ? $instance->getSandboxTable()
                 : $instance->getActiveTable());
@@ -75,7 +76,7 @@ trait HasSandbox
     /**
      * Preserve the physical table and selection when Eloquent copies an aliased model.
      */
-    public function newInstance($attributes = [], $exists = false)
+    public function newInstance(mixed $attributes = [], mixed $exists = false)
     {
         $instance = parent::newInstance($attributes, $exists);
         $instance->sandboxActiveTable = $this->getActiveTable();

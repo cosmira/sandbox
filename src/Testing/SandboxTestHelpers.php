@@ -14,6 +14,16 @@ use Illuminate\Database\Eloquent\Model;
 trait SandboxTestHelpers
 {
     /**
+     * Failure when a helper cannot resolve a user for the sandbox session.
+     */
+    private const MISSING_USER = 'No user ID provided and no authenticated user found';
+
+    /**
+     * Failure when the sandbox status fixture has not been created.
+     */
+    private const MISSING_STATUS = 'SandboxStatus not found';
+
+    /**
      * Open the sandbox for the given or authenticated user.
      */
     protected function openSandbox(
@@ -21,12 +31,12 @@ trait SandboxTestHelpers
         bool $force = false,
         ?string $note = null,
     ): void {
-        $userId ??= auth()->guard()->user()?->getAuthIdentifier();
-        if (! $userId) {
-            throw new \RuntimeException('No user ID provided and no authenticated user found');
+        $resolvedUserId = $userId ?? auth()->guard()->user()?->getAuthIdentifier();
+        if (! $resolvedUserId) {
+            throw new \RuntimeException(self::MISSING_USER);
         }
 
-        Sandbox::for($userId)->open($force, $note);
+        Sandbox::for($resolvedUserId)->open($force, $note);
     }
 
     /**
@@ -36,12 +46,12 @@ trait SandboxTestHelpers
         int|string|null $userId = null,
         ?string $note = null,
     ): void {
-        $userId ??= auth()->guard()->user()?->getAuthIdentifier();
-        if (! $userId) {
-            throw new \RuntimeException('No user ID provided and no authenticated user found');
+        $resolvedUserId = $userId ?? auth()->guard()->user()?->getAuthIdentifier();
+        if (! $resolvedUserId) {
+            throw new \RuntimeException(self::MISSING_USER);
         }
 
-        Sandbox::for($userId)->commit($note);
+        Sandbox::for($resolvedUserId)->commit($note);
     }
 
     /**
@@ -49,12 +59,12 @@ trait SandboxTestHelpers
      */
     protected function rollbackSandbox(int|string|null $userId = null, ?string $note = null): void
     {
-        $userId ??= auth()->guard()->user()?->getAuthIdentifier();
-        if (! $userId) {
-            throw new \RuntimeException('No user ID provided and no authenticated user found');
+        $resolvedUserId = $userId ?? auth()->guard()->user()?->getAuthIdentifier();
+        if (! $resolvedUserId) {
+            throw new \RuntimeException(self::MISSING_USER);
         }
 
-        Sandbox::for($userId)->rollback($note);
+        Sandbox::for($resolvedUserId)->rollback($note);
     }
 
     /**
@@ -62,12 +72,12 @@ trait SandboxTestHelpers
      */
     protected function saveSandbox(int|string|null $userId = null, ?string $note = null): void
     {
-        $userId ??= auth()->guard()->user()?->getAuthIdentifier();
-        if (! $userId) {
-            throw new \RuntimeException('No user ID provided and no authenticated user found');
+        $resolvedUserId = $userId ?? auth()->guard()->user()?->getAuthIdentifier();
+        if (! $resolvedUserId) {
+            throw new \RuntimeException(self::MISSING_USER);
         }
 
-        Sandbox::for($userId)->save($note);
+        Sandbox::for($resolvedUserId)->save($note);
     }
 
     /**
@@ -76,7 +86,7 @@ trait SandboxTestHelpers
     protected function assertSandboxFree(): void
     {
         $status = SandboxStatus::query()->first();
-        $this->assertNotNull($status, 'SandboxStatus not found');
+        $this->assertNotNull($status, self::MISSING_STATUS);
         $this->assertTrue($status->isFree(), 'Sandbox is not free');
     }
 
@@ -85,18 +95,18 @@ trait SandboxTestHelpers
      */
     protected function assertSandboxLocked(int|string|null $userId = null): void
     {
-        $userId ??= auth()->guard()->user()?->getAuthIdentifier();
-        if (! $userId) {
-            throw new \RuntimeException('No user ID provided and no authenticated user found');
+        $resolvedUserId = $userId ?? auth()->guard()->user()?->getAuthIdentifier();
+        if (! $resolvedUserId) {
+            throw new \RuntimeException(self::MISSING_USER);
         }
 
         $status = SandboxStatus::query()->first();
-        $this->assertNotNull($status, 'SandboxStatus not found');
+        $this->assertNotNull($status, self::MISSING_STATUS);
         $this->assertTrue($status->isLocked(), 'Sandbox is not locked');
         $this->assertEquals(
-            (string) $userId,
+            (string) $resolvedUserId,
             (string) $status->user_id,
-            'Sandbox is not owned by '.$userId,
+            'Sandbox is not owned by '.$resolvedUserId,
         );
     }
 
@@ -106,7 +116,7 @@ trait SandboxTestHelpers
     protected function assertSandboxSaved(): void
     {
         $status = SandboxStatus::query()->first();
-        $this->assertNotNull($status, 'SandboxStatus not found');
+        $this->assertNotNull($status, self::MISSING_STATUS);
         $this->assertTrue($status->isSaved(), 'Sandbox is not saved');
     }
 
@@ -153,11 +163,11 @@ trait SandboxTestHelpers
         string|Model $modelOrClass,
         int|string|null $userId = null,
     ): void {
-        $userId ??= auth()->guard()->user()?->getAuthIdentifier();
-        if ($userId === null) {
-            throw new \RuntimeException('No user ID provided and no authenticated user found');
+        $resolvedUserId = $userId ?? auth()->guard()->user()?->getAuthIdentifier();
+        if ($resolvedUserId === null) {
+            throw new \RuntimeException(self::MISSING_USER);
         }
 
-        Sandbox::reset($userId, $modelOrClass);
+        Sandbox::reset($resolvedUserId, $modelOrClass);
     }
 }

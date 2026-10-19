@@ -57,23 +57,23 @@ class SandboxTableSynchronizer
                 'Sandbox synchronization requires at least one key column.',
             );
         }
-        $columns = $columns ?: $this->columnsFrom($sourceTable);
-        if ($columns === []) {
+        $copyColumns = $columns ?: $this->columnsFrom($sourceTable);
+        if ($copyColumns === []) {
             return;
         }
         if ($changeColumn !== null) {
-            $this->ensureChangeColumn($sourceTable, $columns, $changeColumn);
+            $this->ensureChangeColumn($sourceTable, $copyColumns, $changeColumn);
         }
-        $columns = array_values(array_unique([...$keyColumns, ...$columns]));
-        $updateColumns = $rules->updateColumns ?? $columns;
-        if (array_diff($updateColumns, $columns) !== []) {
+        $copyColumns = array_values(array_unique([...$keyColumns, ...$copyColumns]));
+        $updateColumns = $rules->updateColumns ?? $copyColumns;
+        if (array_diff($updateColumns, $copyColumns) !== []) {
             throw new InvalidArgumentException(
                 'Sandbox update columns must exist in the copied table.',
             );
         }
 
         $this->connection->transaction(function () use (
-            $sourceTable, $targetTable, $keyColumns, $columns,
+            $sourceTable, $targetTable, $keyColumns, $copyColumns,
             $targetAlias, $sourceAlias, $parentColumn,
             $rules, $updateColumns,
         ): void {
@@ -82,7 +82,7 @@ class SandboxTableSynchronizer
             }
             if ($parentColumn !== null) {
                 $this->insertTreeMissing(
-                    $targetTable, $sourceTable, $keyColumns, $columns, $parentColumn, $rules,
+                    $targetTable, $sourceTable, $keyColumns, $copyColumns, $parentColumn, $rules,
                 );
             }
             if ($updateColumns !== []) {
@@ -93,7 +93,7 @@ class SandboxTableSynchronizer
                 );
             }
             if ($parentColumn === null) {
-                $this->insertMissing($targetTable, $sourceTable, $keyColumns, $columns, $rules);
+                $this->insertMissing($targetTable, $sourceTable, $keyColumns, $copyColumns, $rules);
 
                 return;
             }
@@ -231,7 +231,7 @@ class SandboxTableSynchronizer
         string $sourceAlias,
         ?SandboxCopyRules $rules,
     ): iterable {
-        $query = $this->connection->table($sourceTable.' as '.$sourceAlias)
+        $query = $this->connection->table($sourceTable, $sourceAlias)
             ->join(
                 $targetTable.' as '.$targetAlias,
                 fn (JoinClause $join) => $this->joinOnKeys(

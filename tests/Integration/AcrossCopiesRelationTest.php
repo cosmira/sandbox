@@ -31,6 +31,17 @@ final class AcrossCopiesRelationTest extends TestCase
     {
         parent::setUp();
 
+        $this->beforeApplicationDestroyed(function (): void {
+            Schema::dropIfExists('copy_membership_draft');
+            foreach ([
+                'copy_memberships', 'copy_code_memberships', 'copy_loose_memberships',
+                'copy_unique_memberships', 'copy_roles', 'copy_members',
+            ] as $table) {
+                Schema::dropIfExists($table.'_sb');
+                Schema::dropIfExists($table);
+            }
+        });
+
         foreach (['', '_sb'] as $suffix) {
             foreach (['copy_members', 'copy_roles'] as $name) {
                 Schema::create($name.$suffix, function (Blueprint $table): void {

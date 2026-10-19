@@ -26,6 +26,15 @@ final class SandboxViewsTest extends TestCase
     {
         parent::setUp();
 
+        $this->beforeApplicationDestroyed(function (): void {
+            foreach (['node_paths', 'node_paths_sb', 'node_links', 'node_links_draft'] as $view) {
+                DB::statement('DROP VIEW IF EXISTS '.$view);
+            }
+
+            Schema::dropIfExists('view_nodes_sb');
+            Schema::dropIfExists('view_nodes');
+        });
+
         foreach (['view_nodes', 'view_nodes_sb'] as $table) {
             Schema::create($table, function (Blueprint $table): void {
                 $table->integer('id')->primary();
@@ -128,6 +137,9 @@ final class SandboxViewsTest extends TestCase
     {
         config()->set('database.connections.view_archive', config('database.connections.testing'));
         $archive = DB::connection('view_archive');
+        $this->beforeApplicationDestroyed(
+            fn () => $archive->getSchemaBuilder()->dropIfExists('archived_nodes'),
+        );
         $archive->getSchemaBuilder()->create('archived_nodes', function (Blueprint $table): void {
             $table->integer('id');
             $table->integer('parent_id');

@@ -11,6 +11,11 @@ use Illuminate\Console\Command;
 class StatusSandboxCommand extends Command
 {
     /**
+     * Display value for missing status details.
+     */
+    private const NOT_AVAILABLE = 'N/A';
+
+    /**
      * The console command name and signature.
      *
      * @var string
@@ -51,11 +56,11 @@ class StatusSandboxCommand extends Command
             $this->line('Detailed Information:');
             $this->table(['Key', 'Value'], [
                 ['Status Code', $status->status->name],
-                ['User ID', $status->user_id ?? 'N/A'],
+                ['User ID', $status->user_id ?? self::NOT_AVAILABLE],
                 ['Last Operation', $this->getOperationName($status->last_operation)],
                 ['Changed At', $status->change_date->format('Y-m-d H:i:s')],
-                ['Sent At', $status->send_date?->format('Y-m-d H:i:s') ?? 'N/A'],
-                ['Note', $status->note ?? 'N/A'],
+                ['Sent At', $status->send_date?->format('Y-m-d H:i:s') ?? self::NOT_AVAILABLE],
+                ['Note', $status->note ?? self::NOT_AVAILABLE],
             ]);
         }
 
@@ -67,6 +72,6 @@ class StatusSandboxCommand extends Command
      */
     private function getOperationName(?SandboxOperation $operation): string
     {
-        return $operation?->description() ?? 'N/A';
+        return $operation?->description() ?? self::NOT_AVAILABLE;
     }
 }

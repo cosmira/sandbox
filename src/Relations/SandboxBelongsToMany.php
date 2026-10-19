@@ -23,8 +23,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class SandboxBelongsToMany extends BelongsToMany
 {
     /**
-     * @param Builder<TRelatedModel> $sandboxQuery
-     * @param TDeclaringModel        $sandboxParent
+     * Construct a pivot relation using its parent’s selected table context.
+     *
+     * @param Builder<TRelatedModel> $sandboxQuery  The related query before pivot resolution.
+     * @param TDeclaringModel        $sandboxParent The parent selecting active or draft tables.
      */
     public function __construct(
         private readonly Builder $sandboxQuery,
@@ -365,16 +367,16 @@ class SandboxBelongsToMany extends BelongsToMany
      */
     protected function resolveTableName(mixed $table): string
     {
-        $table = parent::resolveTableName($table);
+        $resolvedTable = parent::resolveTableName($table);
         $draft = method_exists($this->sandboxParent, 'isUsingSandboxTable')
             && $this->sandboxParent->isUsingSandboxTable();
         $connection = $this->sandboxQuery->getConnection();
         $resolved = Context::resolveTable(
-            $table, $connection,
+            $resolvedTable, $connection,
             $draft,
         );
         if ($resolved === null) {
-            return $table;
+            return $resolvedTable;
         }
 
         $related = $this->sandboxQuery->getModel();
