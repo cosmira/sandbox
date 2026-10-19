@@ -524,10 +524,57 @@ remain in the package. Acquire any host-specific locks before calling `parent::o
 and preserve the host's established lock order. Initializers must not commit or
 perform DDL. Completion behavior is a separate host integration decision.
 
-Automatic relationship switching currently covers `belongsToMany`, not
-polymorphic many-to-many relationships. Raw `DB::table()` calls and literal
+Registered pivot switching covers `belongsToMany`, not polymorphic many-to-many
+relationships. Raw `DB::table()` calls and literal
 table-qualified column names are not rewritten. Individual `reset()` still
 accepts models; registered tables are reset by the complete sandbox lifecycle.
+
+### Views Without Row Copying
+
+Register a view pair when a relationship needs a derived pivot. Both views must
+already exist and reflect their corresponding active or draft source tables:
+
+```php
+Sandbox::tables(SandboxTable::view('group_paths'));
+Sandbox::tables(SandboxTable::view('group_links', sandboxTable: 'draft_group_links'));
+```
+
+Views use the same query selection as registered tables. They are excluded from
+open, commit and rollback copying. Calling `resetSandbox()` or `applySandbox()`
+on a view definition throws before synchronization. `syncAcrossCopies()` also
+rejects a registered view pivot before reading or writing assignments.
+
+A view with its own model uses `HasSandbox` and disables synchronization:
+
+```php
+class GroupPath extends Model
+{
+    use HasSandbox;
+
+    protected $table = 'group_paths';
+
+    public static function supportsSandboxSync(): bool
+    {
+        return false;
+    }
+}
+
+Sandbox::models(GroupPath::class);
+```
+
+Register each pair either through its model or through `SandboxTable::view()`.
+The model participates in query selection, but the lifecycle never copies its
+rows. Direct model reset, apply and single-record reset are rejected as well.
+These settings control package synchronization. They do not make an Eloquent
+model or an updatable database view immutable. Database permissions and the
+application's write API still govern ordinary writes.
+
+Standard relations such as `hasMany` and `belongsTo` inherit the parent instance's
+active or draft selection when the related model uses `HasSandbox`. This also
+applies to eager loading, existence queries and relation counts. Explicit
+`active()` and `sandbox()` scopes take precedence over the global selection;
+hydrated parents retain that choice after the surrounding context changes.
+Relations to ordinary models keep their normal tables and explicit connections.
 
 ## Working With Models
 

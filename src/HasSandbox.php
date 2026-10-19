@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cosmira\Sandbox;
 
 use Cosmira\Sandbox\Eloquent\Context;
+use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\Relations\SandboxBelongsToMany;
 use Cosmira\Sandbox\Support\SandboxColumns;
 use Cosmira\Sandbox\Support\SandboxTableSynchronizer;
@@ -34,6 +35,53 @@ trait HasSandbox
             $query, $parent, $table, $foreignPivotKey, $relatedPivotKey,
             $parentKey, $relatedKey, $relationName,
         );
+    }
+
+    /**
+     * Keep related sandbox models on the same copy as their parent instance.
+     */
+    protected function newRelatedInstance($class)
+    {
+        $instance = parent::newRelatedInstance($class);
+
+        $this->inheritSandboxSelection($instance);
+
+        return $instance;
+    }
+
+    /**
+     * Keep the intermediate model of a through relation on the parent copy.
+     */
+    protected function newRelatedThroughInstance($class)
+    {
+        $instance = parent::newRelatedThroughInstance($class);
+        $this->inheritSandboxSelection($instance);
+
+        return $instance;
+    }
+
+    /**
+     * Pin sandbox-aware related models without changing their connections.
+     */
+    private function inheritSandboxSelection(Model $instance): void
+    {
+        if (method_exists($instance, 'getSandboxTable') && method_exists($instance, 'getActiveTable')) {
+            $instance->setTable($this->isUsingSandboxTable()
+                ? $instance->getSandboxTable()
+                : $instance->getActiveTable());
+        }
+    }
+
+    /**
+     * Preserve the physical table and selection when Eloquent copies an aliased model.
+     */
+    public function newInstance($attributes = [], $exists = false)
+    {
+        $instance = parent::newInstance($attributes, $exists);
+        $instance->sandboxActiveTable = $this->getActiveTable();
+        $instance->sandboxResolvedDraft = $this->isUsingSandboxTable();
+
+        return $instance;
     }
 
     /**
@@ -290,6 +338,12 @@ trait HasSandbox
         string $targetAlias,
     ): void {
         $instance = new static();
+
+        throw_unless(
+            static::supportsSandboxSync(),
+            SandboxException::class,
+            'Sandbox views cannot be synchronized: '.static::class,
+        );
 
         $instance->getConnection()->transaction(function () use (
             $sourceTable,

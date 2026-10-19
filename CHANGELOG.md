@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.0 - 2026-10-20
+
+### Added
+
+- `SandboxTable::view()` registers active and draft views for relation queries
+  without including them in lifecycle row copying.
+- Models returning `false` from `supportsSandboxSync()` retain table switching
+  while rejecting direct synchronization and skipping lifecycle copies.
+
+### Fixed
+
+- Ordinary Eloquent relations inherit their parent's active or draft selection,
+  including explicit scopes, eager loads, counts and nested self-join queries.
+
 ## 1.1.0 - 2026-10-15
 
 ### Added

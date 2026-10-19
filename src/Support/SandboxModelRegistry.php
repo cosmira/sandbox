@@ -66,7 +66,9 @@ class SandboxModelRegistry
                 $this->ensureSeparateTable($model, $table);
             }
             $this->tables[$table->table] = $table;
-            $this->resources[] = $table;
+            if ($table->supportsSync) {
+                $this->resources[] = $table;
+            }
             $this->tableConnection = $connection;
         }
     }
@@ -101,6 +103,22 @@ class SandboxModelRegistry
         }
 
         return null;
+    }
+
+    /**
+     * Reject attempts to synchronize a query-only view.
+     */
+    public function ensureTableSupportsSync(string $name): void
+    {
+        foreach ($this->tables as $table) {
+            if (in_array($name, [$table->table, $table->sandboxTable], true)) {
+                throw_unless(
+                    $table->supportsSync,
+                    SandboxException::class,
+                    'Sandbox views cannot be synchronized: '.$name,
+                );
+            }
+        }
     }
 
     /**
@@ -229,7 +247,8 @@ class SandboxModelRegistry
             foreach ($this->tables as $table) {
                 $this->ensureSeparateTable($model, $table);
             }
-            if (! in_array($model, $this->models, true)) {
+            if (! in_array($model, $this->models, true)
+                && (! method_exists($model, 'supportsSandboxSync') || $model::supportsSandboxSync())) {
                 $this->resources[] = $model;
             }
 

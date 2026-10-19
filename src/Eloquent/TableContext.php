@@ -36,6 +36,14 @@ final class TableContext
     }
 
     /**
+     * Reject synchronization through a registered view.
+     */
+    public function ensureTableSupportsSync(string $table): void
+    {
+        $this->registry->ensureTableSupportsSync($table);
+    }
+
+    /**
      * Set the table selection for a model within this application scope.
      *
      * @param class-string $model

@@ -102,6 +102,8 @@ class SandboxBelongsToMany extends BelongsToMany
             );
         }
 
+        Context::ensureTableSupportsSync($this->table);
+
         $customQuery = $this->hasCustomSourceQuery();
 
         if ($customQuery || $this->pivotValues !== []) {

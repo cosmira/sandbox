@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cosmira\Sandbox;
 
+use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\Support\SandboxTableSynchronizer;
 use Illuminate\Database\ConnectionInterface;
 use InvalidArgumentException;
@@ -19,10 +20,11 @@ final readonly class SandboxTable
     /**
      * Describe an active/draft table pair and validate its keys and tree settings.
      *
-     * @param non-empty-list<string> $primaryKey
-     * @param string                 $table        Physical active table name.
-     * @param ?string                $parentColumn Parent column for tree copy ordering.
-     * @param ?SandboxCopyRules      $reset        Draft row filters and update columns.
+     * @param list<string>      $primaryKey
+     * @param string            $table        Physical active table name.
+     * @param ?string           $parentColumn Parent column for tree copy ordering.
+     * @param ?SandboxCopyRules $reset        Draft row filters and update columns.
+     * @param bool              $supportsSync Whether the table participates in lifecycle copying.
      */
     public function __construct(
         public string $table,
@@ -30,12 +32,23 @@ final readonly class SandboxTable
         ?string $sandboxTable = null,
         public ?string $parentColumn = null,
         public ?SandboxCopyRules $reset = null,
+        public bool $supportsSync = true,
     ) {
         $this->sandboxTable = $sandboxTable ?? $table.'_sb';
 
         $this->validateNames();
-        $this->validateKeys($this->primaryKey);
+        if ($this->supportsSync) {
+            $this->validateKeys($this->primaryKey);
+        }
         $this->validateParent();
+    }
+
+    /**
+     * Register active and draft views for queries without copying their rows.
+     */
+    public static function view(string $table, ?string $sandboxTable = null): self
+    {
+        return new self($table, [], $sandboxTable, supportsSync: false);
     }
 
     /**
@@ -130,6 +143,12 @@ final readonly class SandboxTable
         string $targetTable,
         ?SandboxCopyRules $rules = null,
     ): void {
+        throw_unless(
+            $this->supportsSync,
+            SandboxException::class,
+            'Sandbox views cannot be synchronized: '.$this->table,
+        );
+
         (new SandboxTableSynchronizer($connection))->sync(
             sourceTable: $sourceTable,
             targetTable: $targetTable,

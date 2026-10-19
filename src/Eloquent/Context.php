@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Facade;
 /**
  * Bridge static Eloquent model helpers to the scoped selection service.
  *
+ * @method static void    ensureTableSupportsSync(string $table)
  * @method static void    select(string $model, bool $draft)
  * @method static bool    isUsingSandbox(string $model)
  * @method static ?string resolveTable(string $table, Connection $connection, bool $draft)

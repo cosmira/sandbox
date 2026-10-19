@@ -20,6 +20,11 @@ class SandboxRecordRestorer
     public function restore(Model $model): void
     {
         $this->ensureRestorableModel($model);
+        throw_if(
+            method_exists($model, 'supportsSandboxSync') && ! $model->supportsSandboxSync(),
+            SandboxException::class,
+            'Sandbox views cannot be synchronized: '.$model::class,
+        );
 
         $keyColumns = $this->keyColumns($model);
         $keyValues = $this->keyValues($model, $keyColumns);
