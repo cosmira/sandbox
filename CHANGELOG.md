@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.0 - 2026-10-20
+
+### Added
+
+- `Sandbox::transaction()` completes model operations and synchronous
+  `SandboxChanged` listeners in one transaction without changing draft ownership
+  or table selection.
+
 ## 2.0.0 - 2026-10-20
 
 ### Added

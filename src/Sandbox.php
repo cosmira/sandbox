@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cosmira\Sandbox;
 
 use Cosmira\Sandbox\Contracts\SandboxBackend;
+use Cosmira\Sandbox\Events\SandboxChanged;
 use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\Models\SandboxStatus;
 use Cosmira\Sandbox\Support\SandboxModelRegistry;
@@ -166,6 +167,30 @@ class Sandbox
             $this->userId($user),
             fn (): mixed => $this->models->usingTables(true, $callback, $this->connection()),
         );
+    }
+
+    /**
+     * Complete a model operation and its synchronous listeners in one transaction.
+     *
+     * @template TResult
+     *
+     * @param class-string<Model> $model
+     * @param callable(): TResult $callback
+     *
+     * @return TResult
+     */
+    public function transaction(string $model, callable $callback): mixed
+    {
+        $connection = $this->connection();
+        $this->models->ensureModelConnection(new $model(), $connection);
+
+        return $connection->transaction(function () use ($model, $callback, $connection): mixed {
+            $result = $callback();
+
+            event(new SandboxChanged($model, $connection));
+
+            return $result;
+        });
     }
 
     /**

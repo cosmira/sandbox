@@ -750,6 +750,7 @@ and external integrations.
 
 | Event | Data |
 | --- | --- |
+| `SandboxChanged` | model class and `connection`; synchronous completion of an explicit operation |
 | `SandboxInitialized` | lifecycle `connection`; synchronous preparation of a newly copied draft |
 | `SandboxOpened` | `userId`, `force`, `note`; notification after commit |
 | `SandboxResetting` | dispatched before sandbox data should be reset |
@@ -773,6 +774,36 @@ resuming a Saved draft, and taking over an existing draft preserve its prepared
 data and edits. `SandboxOpened` remains an after-commit notification of an actual
 opening transition; it does not run when the current owner opens again. Use it
 for notifications, not preparation required by the edit callback.
+
+### Completing model operations
+
+Use `Sandbox::transaction()` to finish a complete model operation, including its
+relationship changes, before subscribers update derived data:
+
+```php
+$category = Sandbox::transaction(Category::class, function () use ($attributes, $parentIds) {
+    $category = Category::create($attributes);
+    $category->parents()->sync($parentIds);
+
+    return $category;
+});
+```
+
+The declared model must use the sandbox connection; a mismatch is rejected
+before invoking the callback. All writes in the callback must use that same
+connection to participate in rollback. After it returns, `SandboxChanged`
+is dispatched synchronously inside that transaction, before the result is
+returned to the caller. Listeners can inspect `$event->model` to handle their
+module's operations and use `$event->connection` for transactional updates.
+A callback or listener failure rolls back the transaction. Required listeners
+must not be queued or implement `ShouldHandleEventsAfterCommit`.
+
+This method does not open a draft, claim ownership or change table selection.
+Use it within the existing editing scope. Each explicit transaction emits its
+own completion event, including nested calls; changes are not coalesced.
+An enclosing transaction may still roll back after this event, so it is not a
+notification that data has committed. Listeners must not perform operations
+that commit the database transaction implicitly.
 
 ## Testing
 
