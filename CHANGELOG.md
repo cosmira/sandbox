@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.0 - 2026-10-20
+
+### Added
+
+- `SandboxInitialized` provides synchronous preparation on the lifecycle connection
+  after a new draft is copied and before editing starts.
+- Initialization contracts cover preparation failures, custom backends and
+  connection isolation while preserving existing drafts on reopen and resume.
+
+### Compatibility
+
+- `SandboxOpened` remains an after-commit transition notification.
+- Initialization listeners must use transactional writes on the event connection;
+  procedures that commit internally cannot participate in atomic preparation.
+
 ## 1.2.1 - 2026-10-20
 
 ### Changed

@@ -741,7 +741,8 @@ and external integrations.
 
 | Event | Data |
 | --- | --- |
-| `SandboxOpened` | `userId`, `force`, `note` |
+| `SandboxInitialized` | lifecycle `connection`; synchronous preparation of a newly copied draft |
+| `SandboxOpened` | `userId`, `force`, `note`; notification after commit |
 | `SandboxResetting` | dispatched before sandbox data should be reset |
 | `SandboxCommitting` | dispatched before sandbox data is applied |
 | `SandboxCommitted` | `userId`, `committedAt`, `note` |
@@ -749,6 +750,20 @@ and external integrations.
 | `SandboxRolledBack` | `userId`, `rolledBackAt`, `note` |
 | `SandboxSaved` | `userId`, `savedAt`, `note` |
 | `SandboxResolvingModels` | request-time model switching |
+
+`SandboxInitialized` runs after `initializeDraft()` returns, inside the opening
+transaction and before the callback passed to `edit()`. It also runs when a host
+backend overrides initialization. Use synchronous listeners to prepare derived
+draft data on `$event->connection`; explicitly address draft tables because the
+editing table scope has not started yet. Throwing aborts opening and rolls back
+transactional writes. Listeners must not commit, perform DDL, or enqueue required
+preparation.
+
+Initialization occurs only when opening a Free sandbox. Reopening an owned draft,
+resuming a Saved draft, and taking over an existing draft preserve its prepared
+data and edits. `SandboxOpened` remains an after-commit notification of an actual
+opening transition; it does not run when the current owner opens again. Use it
+for notifications, not preparation required by the edit callback.
 
 ## Testing
 

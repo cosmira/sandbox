@@ -9,6 +9,7 @@ use Cosmira\Sandbox\Enums\SandboxOperation;
 use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
 use Cosmira\Sandbox\Events\SandboxCommitted;
 use Cosmira\Sandbox\Events\SandboxCommitting;
+use Cosmira\Sandbox\Events\SandboxInitialized;
 use Cosmira\Sandbox\Events\SandboxOpened;
 use Cosmira\Sandbox\Events\SandboxResetting;
 use Cosmira\Sandbox\Events\SandboxRolledBack;
@@ -78,6 +79,7 @@ class EloquentSandboxBackend implements SandboxBackend
             if ($status->isFree()) {
                 Event::dispatch(new SandboxResetting());
                 $this->initializeDraft();
+                Event::dispatch(new SandboxInitialized($this->connection()));
             }
             if (! $status->isFree() && $force && ! $status->isForUser($userId)) {
                 Event::dispatch(new SandboxResetting());
