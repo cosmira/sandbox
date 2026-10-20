@@ -100,9 +100,10 @@ The owner reads and writes a locked draft. Other users read active data and
 cannot modify the locked configuration. Authenticated users can read a saved
 draft; guests always read active data. Host permissions apply to every operation.
 
-An edit includes opening, locking, and writes in one transaction. Exceptions
-and HTTP responses with status 400 or higher roll it back. Completed lifecycle
-events run after commit, so a listener failure cannot undo published data.
+With the default Eloquent backend, an edit includes opening, locking, and writes
+in one transaction. Exceptions and HTTP responses with status 400 or higher roll
+it back. Completed lifecycle events run after commit, so a listener failure
+cannot undo published data.
 
 ## Documentation
 

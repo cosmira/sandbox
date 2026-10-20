@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.3.0 - 2026-10-20
+## 2.0.0 - 2026-10-20
 
 ### Added
 
@@ -8,6 +8,18 @@
   after a new draft is copied and before editing starts.
 - Initialization contracts cover preparation failures, custom backends and
   connection isolation while preserving existing drafts on reopen and resume.
+
+### Migration
+
+- Custom `SandboxBackend` implementations must implement
+  `edit(int|string $userId, callable $callback): mixed`. Open the owned draft,
+  invoke the callback once and return its result under the backend's transaction
+  policy. Backends extending `EloquentSandboxBackend` inherit the atomic default.
+- `Sandbox::edit()` delegates transaction ownership to the backend and scopes
+  draft tables to the callback, restoring the previous scope even on failure.
+- Move custom draft-opening logic from `Sandbox::open()` overrides into the
+  backend. Edits now call the backend directly; overriding `Sandbox::open()`
+  affects explicit opening calls only.
 
 ### Compatibility
 

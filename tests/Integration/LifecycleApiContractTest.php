@@ -202,21 +202,23 @@ final class LifecycleApiContractTest extends TestCase
     }
 
     #[Test]
-    public function editUsesTheBackendConnectionTransactionAndRollsBackOnFailure(): void
+    public function failedEditRestoresTheDraftAndItsOwnership(): void
     {
-        $connection = DB::connection();
-        $level = $connection->transactionLevel();
-        $backend = $this->createMock(SandboxBackend::class);
-        $backend->method('connection')->willReturn($connection);
-        $backend->expects($this->once())->method('open')->with(7, false, null)
-            ->willReturnCallback(function () use ($connection, $level): void {
-                $this->assertSame($level + 1, $connection->transactionLevel());
-                $connection->table('sandbox_status')->update(['note' => 'Uncommitted']);
-            });
+        $this->createSecondaryDatabase();
+        $models = new SandboxModelRegistry();
+        $models->register(SecondaryApiModel::class);
+        $backend = new EloquentSandboxBackend(
+            $models,
+            statusModel: (new SandboxStatus())->setConnection('sandbox_secondary'),
+        );
+        $sandbox = new Sandbox($models, $backend);
+        $connection = $backend->connection();
+        $connection->table('api_items')->insert(['id' => 1, 'name' => 'Active']);
+        $connection->table('api_items_sb')->insert(['id' => 1, 'name' => 'Previous draft']);
 
         try {
-            (new Sandbox(backend: $backend, models: app(SandboxModelRegistry::class)))->edit(7, function () use ($connection, $level): never {
-                $this->assertSame($level + 1, $connection->transactionLevel());
+            $sandbox->edit(7, function (): never {
+                SecondaryApiModel::query()->whereKey(1)->update(['name' => 'Rejected edit']);
 
                 throw new RuntimeException('Reject edit.');
             });
@@ -225,8 +227,38 @@ final class LifecycleApiContractTest extends TestCase
             $this->assertSame('Reject edit.', $exception->getMessage());
         }
 
-        $this->assertSame($level, $connection->transactionLevel());
-        $this->assertNull(SandboxStatus::firstOrFail()->note);
+        $this->assertTrue($sandbox->status()->isFree());
+        $this->assertSame('Previous draft', $connection->table('api_items_sb')->value('name'));
+        $this->assertSame('Active', SecondaryApiModel::query()->value('name'));
+    }
+
+    #[Test]
+    public function customBackendOwnsEditingWhileTheCallbackUsesDraftTables(): void
+    {
+        $this->createSecondaryDatabase();
+        $models = new SandboxModelRegistry();
+        $models->register(SecondaryApiModel::class);
+        $connection = DB::connection('sandbox_secondary');
+        $connection->table('api_items')->insert(['id' => 1, 'name' => 'Active']);
+        $connection->table('api_items_sb')->insert(['id' => 1, 'name' => 'Draft']);
+        $backend = $this->createMock(SandboxBackend::class);
+        $backend->method('connection')->willReturn($connection);
+        $backend->expects($this->never())->method('open');
+        $backend->expects($this->once())->method('edit')->with(7, $this->isCallable())
+            ->willReturnCallback(function (int $userId, callable $callback) use ($connection): string {
+                $this->assertSame(0, $connection->transactionLevel());
+                $this->assertSame('Active', SecondaryApiModel::query()->value('name'));
+                $result = $callback();
+                $this->assertSame('Active', SecondaryApiModel::query()->value('name'));
+
+                return 'Edited '.$result;
+            });
+        $user = new ApiResetModel();
+        $user->setAttribute('id', 7);
+
+        $result = (new Sandbox($models, $backend))->edit($user, fn () => SecondaryApiModel::query()->value('name'));
+
+        $this->assertSame('Edited Draft', $result);
     }
 
     #[Test]

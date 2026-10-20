@@ -229,7 +229,8 @@ concurrent coroutine runtimes are not supported. A hydrated model retains its
 original physical table even after the context ends. New queries use the current
 context, so do not carry hydrated draft models across authorization boundaries.
 
-An edit includes the lock, opening and writes in one database transaction.
+With the default Eloquent backend, an edit includes the lock, opening and writes
+in one database transaction.
 Exceptions and HTTP responses with status >= 400 roll back that transaction.
 Completed lifecycle events run after commit. A failed listener cannot undo an
 already committed transition; the host must handle notifications and retries
@@ -392,8 +393,16 @@ Bind `Cosmira\Sandbox\Contracts\SandboxBackend` to customize the complete
 lifecycle, including `reset`. Facade and builder operations delegate to that
 backend. The application owns permissions, native procedure selection,
 notifications and external updater execution. A backend must use the selected
-connection and must never commit an enclosing edit transaction internally.
-The default backend rejects registered models on a different connection.
+connection. Its `edit($userId, $callback)` method owns opening the draft and
+executing the callback once. The package scopes draft tables to that callback
+and restores the previous table scope when it returns or throws.
+
+The default Eloquent backend opens and edits in one transaction, rolling back
+both if the callback fails. It rejects registered models on a different
+connection. Custom backends own their transaction policy and must document
+any weaker guarantees required by native operations that commit internally.
+Put custom opening logic in the backend: `Sandbox::edit()` does not call
+`Sandbox::open()` overrides.
 
 ## Model Registration
 

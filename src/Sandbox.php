@@ -158,15 +158,14 @@ class Sandbox
     }
 
     /**
-     * Open the draft and execute the callback in one transaction and table scope.
+     * Execute the backend edit operation with draft tables scoped to the callback.
      */
     public function edit(int|string|Model $user, callable $callback): mixed
     {
-        return $this->connection()->transaction(function () use ($user, $callback): mixed {
-            $this->open($user);
-
-            return $this->models->usingTables(true, $callback, $this->connection());
-        });
+        return $this->backend->edit(
+            $this->userId($user),
+            fn (): mixed => $this->models->usingTables(true, $callback, $this->connection()),
+        );
     }
 
     /**

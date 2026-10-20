@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Lifecycle mutations must lock and validate ownership on their connection.
- * Implementations must not commit an enclosing transaction owned by edit().
+ * Each backend owns the transaction boundary of its edit operation.
  */
 interface SandboxBackend
 {
@@ -18,6 +18,11 @@ interface SandboxBackend
      * Return the connection used for lifecycle locks and data changes.
      */
     public function connection(): ConnectionInterface;
+
+    /**
+     * Open the owned draft and execute the callback once using the backend's transaction policy.
+     */
+    public function edit(int|string $userId, callable $callback): mixed;
 
     /**
      * The host must authorize force takeover before calling this method.

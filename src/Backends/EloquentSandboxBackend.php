@@ -52,6 +52,18 @@ class EloquentSandboxBackend implements SandboxBackend
     }
 
     /**
+     * Open the draft and execute the callback in one transaction.
+     */
+    public function edit(int|string $userId, callable $callback): mixed
+    {
+        return $this->connection()->transaction(function () use ($userId, $callback): mixed {
+            $this->open($userId);
+
+            return $callback();
+        });
+    }
+
+    /**
      * Open the sandbox for the given user.
      *
      *

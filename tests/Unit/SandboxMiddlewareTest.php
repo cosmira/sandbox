@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Cosmira\Sandbox\Tests\Unit;
 
-use Cosmira\Sandbox\Contracts\SandboxBackend;
 use Cosmira\Sandbox\Enums\SandboxStatus as SandboxStatusEnum;
 use Cosmira\Sandbox\Events\SandboxResolvingModels;
 use Cosmira\Sandbox\HasSandbox;
@@ -166,14 +165,16 @@ final class SandboxMiddlewareTest extends TestCase
     }
 
     #[Test]
-    public function writeRequestsUseTheInjectedSandboxWhenOpeningFreeSandbox(): void
+    public function writeRequestsDelegateEditingToTheInjectedSandbox(): void
     {
         SandboxStatus::query()->update([
             'status'  => SandboxStatusEnum::Free,
             'user_id' => null,
         ]);
 
-        $sandbox = new TrackingSandboxMiddlewareSandbox(app(SandboxModelRegistry::class), app(SandboxBackend::class));
+        $sandbox = $this->createMock(Sandbox::class);
+        $sandbox->expects($this->once())->method('edit')->with('7', $this->isCallable())
+            ->willReturnCallback(fn (string $userId, callable $callback): mixed => $callback());
         $middleware = new SandboxMiddleware(sandbox: $sandbox, models: app(SandboxModelRegistry::class));
         $request = Request::create('/categories', 'POST');
         $request->setUserResolver(fn () => new StringIdentifierUserStub('7'));
@@ -181,7 +182,7 @@ final class SandboxMiddlewareTest extends TestCase
         $response = $middleware->handle($request, fn (): string => 'response');
 
         $this->assertSame('response', $response);
-        $this->assertSame(['7'], $sandbox->openedFor);
+        $this->assertTrue(SandboxStatus::firstOrFail()->isFree());
     }
 
     #[Test]
@@ -504,29 +505,6 @@ class TrackingSandboxMiddlewareRegistry extends SandboxModelRegistry
     public function useSandbox(string ...$models): void
     {
         $this->resolvedModels[] = $models;
-    }
-}
-
-class TrackingSandboxMiddlewareSandbox extends Sandbox
-{
-    /**
-     * The users passed to the injected sandbox lifecycle manager.
-     *
-     * @var array<int, int|string>
-     */
-    public array $openedFor = [];
-
-    public function open(int|string|Model $user, bool $force = false, ?string $note = null): void
-    {
-        $this->openedFor[] = $user instanceof Model ? $user->getKey() : $user;
-    }
-
-    public function status(): ?SandboxStatus
-    {
-        return new SandboxStatus([
-            'status'  => SandboxStatusEnum::Locked,
-            'user_id' => 7,
-        ]);
     }
 }
 
