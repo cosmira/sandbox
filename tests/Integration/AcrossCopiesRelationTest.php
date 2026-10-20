@@ -47,6 +47,7 @@ final class AcrossCopiesRelationTest extends TestCase
                 Schema::create($name.$suffix, function (Blueprint $table): void {
                     $table->string('id')->primary();
                     $table->string('code')->unique();
+                    $table->timestamps();
                 });
             }
 
@@ -57,7 +58,7 @@ final class AcrossCopiesRelationTest extends TestCase
                     $table->integer('weight')->nullable();
                     $table->string('note')->nullable();
                     $table->timestamps();
-                    $table->primary(['member_key', 'role_key']);
+                    $table->primary(['role_key', 'member_key']);
                 });
             }
 
@@ -445,7 +446,7 @@ final class AcrossCopiesRelationTest extends TestCase
     #[Test]
     public function oneRelationInstanceCanBeReusedWithoutQueryMutation(): void
     {
-        $roles = CopyMember::findOrFail('member')->roles();
+        $roles = CopyMember::findOrFail('member')->roles()->orderByDesc('code');
         $sql = $roles->toSql();
         $roles->syncAcrossCopies(['new' => ['weight' => 20]]);
         $roles->syncAcrossCopies(['old' => ['weight' => 11]]);
@@ -586,6 +587,82 @@ final class AcrossCopiesRelationTest extends TestCase
     }
 
     #[Test]
+    public function draftOnlyAssignmentsAreProcessedWhenTheActiveCopyHasNoChanges(): void
+    {
+        DB::table('copy_memberships')->where('member_key', 'member')->delete();
+        DB::table('copy_roles_sb')->insert(['id' => 'draft', 'code' => 'draft-code']);
+
+        $affected = CopyMember::findOrFail('member')->roles()->syncAcrossCopies(['draft']);
+
+        $this->assertSame(['copy_members_sb'], array_map(fn (Model $copy) => $copy->getTable(), $affected));
+        $this->assertDatabaseHas('copy_memberships_sb', ['member_key' => 'member', 'role_key' => 'draft']);
+    }
+
+    #[Test]
+    public function individualAssignmentsContinueAfterInsertsAndUnchangedRows(): void
+    {
+        $roles = CopyMember::findOrFail('member')->customRoles();
+        $roles->syncAcrossCopies(['new' => ['weight' => 20], 'old' => ['weight' => 15]]);
+        $roles->syncAcrossCopies(['new', 'old' => ['weight' => 25], '1' => ['weight' => 30]]);
+
+        foreach (['', '_sb'] as $suffix) {
+            $this->assertSame(
+                ['1' => 30, 'new' => 20, 'old' => 25],
+                DB::table('copy_memberships'.$suffix)->where('member_key', 'member')
+                    ->orderBy('role_key')->pluck('weight', 'role_key')->all(),
+            );
+        }
+    }
+
+    #[Test]
+    public function syncingAssignmentsDoesNotTouchRelatedTimestamps(): void
+    {
+        $this->freezeTime();
+        $before = now()->subDay()->toDateTimeString();
+        foreach (['', '_sb'] as $suffix) {
+            DB::table('copy_roles'.$suffix)->update(['updated_at' => $before]);
+        }
+        $member = CopyMember::findOrFail('member');
+        $roles = $member->customRoles();
+
+        $roles->syncAcrossCopies(['new' => ['weight' => 20], 'old' => ['weight' => 15]]);
+        $roles->syncAcrossCopies(['new' => ['weight' => 25]]);
+
+        foreach (['', '_sb'] as $suffix) {
+            $this->assertSame([$before], DB::table('copy_roles'.$suffix)->distinct()->pluck('updated_at')->all());
+        }
+    }
+
+    #[Test]
+    public function batchesIgnoreAttributeAndPrimaryKeyOrderAndNonUniqueIndexes(): void
+    {
+        foreach (['', '_sb'] as $suffix) {
+            Schema::table('copy_memberships'.$suffix, function (Blueprint $table): void {
+                $table->index('weight');
+            });
+        }
+        $queries = [];
+        DB::listen(function ($query) use (&$queries): void {
+            if (preg_match('/^(?:insert|merge)\b/i', $query->sql) === 1
+                && str_contains($query->sql, 'copy_memberships')) {
+                $queries[] = $query->sql;
+            }
+        });
+
+        CopyRole::findOrFail('new')->members()->syncAcrossCopies([
+            'member' => ['weight' => 11, 'note' => 'First'],
+            'other'  => ['note' => 'Second', 'weight' => 20],
+        ]);
+
+        $this->assertCount(2, $queries);
+        foreach (['', '_sb'] as $suffix) {
+            $this->assertDatabaseHas('copy_memberships'.$suffix, [
+                'member_key' => 'other', 'role_key' => 'new', 'weight' => 20, 'note' => 'Second',
+            ]);
+        }
+    }
+
+    #[Test]
     public function pivotIdentityOverridesAreRejectedBeforeEitherCopyChanges(): void
     {
         $this->expectException(InvalidArgumentException::class);
@@ -599,6 +676,7 @@ class CopyMember extends Model
 
     protected $table = 'copy_members';
     protected $guarded = [];
+    protected $touches = ['roles'];
     protected $keyType = 'string';
     public $incrementing = false;
     public $timestamps = false;
@@ -662,7 +740,17 @@ class CopyRole extends Model
     protected $guarded = [];
     protected $keyType = 'string';
     public $incrementing = false;
-    public $timestamps = false;
+    public $timestamps = true;
+
+    protected static function getSandboxTrackChangeColumn(): ?string
+    {
+        return 'updated_at';
+    }
+
+    public function members(): BelongsToMany
+    {
+        return $this->belongsToMany(CopyMember::class, 'copy_memberships', 'role_key', 'member_key');
+    }
 }
 
 class CopyMembership extends Pivot

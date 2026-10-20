@@ -34,6 +34,27 @@ final class StatusPersistenceContractTest extends TestCase
         }
     }
 
+    #[Test]
+    public function keyedStatusCanBeSavedOutsideALifecycleTransaction(): void
+    {
+        $status = SandboxStatus::firstOrFail();
+
+        $status->update(['note' => 'Reviewed configuration']);
+
+        $this->assertSame('Reviewed configuration', $status->fresh()->note);
+        $this->assertSame(0, DB::transactionLevel());
+    }
+
+    #[Test]
+    public function singletonRespectsTheSuppliedStatusQuery(): void
+    {
+        $query = SandboxStatus::query()->where('user_id', 99);
+        $this->expectException(SandboxException::class);
+        $this->expectExceptionMessage('exactly one provisioned row');
+
+        (new SandboxStatus())->singleton($query);
+    }
+
     public static function vetoedOperations(): iterable
     {
         foreach (['saving', 'updating'] as $event) {

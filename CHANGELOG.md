@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.1 - 2026-10-20
+
+### Changed
+
+- Many-to-many relations reuse the table selection inherited by related models.
+- Contract tests cover ordered relation reuse, draft-only assignments, untouched
+  related timestamps, composite identities and batch eligibility.
+
+### Fixed
+
+- Database integration fixtures clean up their tables between tests.
+- Static analysis and code quality checks use consistent source annotations and
+  narrowly scoped coupling exceptions for service registration and lifecycle events.
+
 ## 1.2.0 - 2026-10-20
 
 ### Added

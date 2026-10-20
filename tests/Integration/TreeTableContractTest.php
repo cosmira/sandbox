@@ -8,6 +8,7 @@ use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\Sandbox;
 use Cosmira\Sandbox\SandboxCopyRules;
 use Cosmira\Sandbox\SandboxTable;
+use Cosmira\Sandbox\Support\SandboxTableSynchronizer;
 use Cosmira\Sandbox\Tests\TestCase;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -36,6 +37,16 @@ final class TreeTableContractTest extends TestCase
         Schema::dropIfExists('tree_nodes_sb');
         Schema::dropIfExists('tree_nodes');
         parent::tearDown();
+    }
+
+    #[Test]
+    public function treeCopiesRejectAProjectionWithoutTheParentColumn(): void
+    {
+        $synchronizer = new SandboxTableSynchronizer(DB::connection());
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('selected parent column');
+
+        $synchronizer->sync('tree_nodes', 'tree_nodes_sb', ['id'], ['id', 'name'], null, parentColumn: 'parent_id');
     }
 
     #[Test]

@@ -363,7 +363,7 @@ class SandboxBelongsToMany extends BelongsToMany
     }
 
     /**
-     * Select a registered pivot table and align the related model with its parent.
+     * Select the registered pivot table for the parent copy.
      */
     protected function resolveTableName(mixed $table): string
     {
@@ -377,14 +377,6 @@ class SandboxBelongsToMany extends BelongsToMany
         );
         if ($resolved === null) {
             return $resolvedTable;
-        }
-
-        $related = $this->sandboxQuery->getModel();
-        if (method_exists($related, 'getSandboxTable')
-            && method_exists($related, 'getActiveTable')) {
-            $relatedTable = $draft ? $related->getSandboxTable() : $related->getActiveTable();
-            $related->setTable($relatedTable);
-            $this->sandboxQuery->from($relatedTable);
         }
 
         return $resolved;

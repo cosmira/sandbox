@@ -174,7 +174,7 @@ final class SandboxViewsTest extends TestCase
     public function viewDefinitionsRejectDirectSynchronization(string $operation): void
     {
         $this->expectException(SandboxException::class);
-        $this->expectExceptionMessage('Sandbox views cannot be synchronized');
+        $this->expectExceptionMessage('Sandbox views cannot be synchronized: node_links');
 
         SandboxTable::view('node_links', 'node_links_draft')->$operation(DB::connection());
     }
@@ -185,7 +185,7 @@ final class SandboxViewsTest extends TestCase
     public function viewModelsRejectDirectSynchronization(string $operation): void
     {
         $this->expectException(SandboxException::class);
-        $this->expectExceptionMessage('Sandbox views cannot be synchronized');
+        $this->expectExceptionMessage('Sandbox views cannot be synchronized: '.NodePath::class);
 
         NodePath::$operation();
     }
@@ -195,7 +195,7 @@ final class SandboxViewsTest extends TestCase
     {
         $path = NodePath::active()->findOrFail(1);
         $this->expectException(SandboxException::class);
-        $this->expectExceptionMessage('Sandbox views cannot be synchronized');
+        $this->expectExceptionMessage('Sandbox views cannot be synchronized: '.NodePath::class);
 
         (new SandboxRecordRestorer())->restore($path);
     }
@@ -205,7 +205,7 @@ final class SandboxViewsTest extends TestCase
     {
         $root = ViewNode::active()->findOrFail(1);
         $this->expectException(SandboxException::class);
-        $this->expectExceptionMessage('Sandbox views cannot be synchronized');
+        $this->expectExceptionMessage('Sandbox views cannot be synchronized: node_links');
 
         $root->descendants()->syncAcrossCopies([]);
     }

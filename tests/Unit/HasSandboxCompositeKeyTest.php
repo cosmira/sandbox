@@ -6,6 +6,8 @@ namespace Cosmira\Sandbox\Tests\Unit;
 
 use Cosmira\Sandbox\HasSandbox;
 use Cosmira\Sandbox\Sandbox;
+use Cosmira\Sandbox\SandboxCopyRules;
+use Cosmira\Sandbox\SandboxTable;
 use Cosmira\Sandbox\Tests\TestCase;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -37,6 +39,33 @@ final class HasSandboxCompositeKeyTest extends TestCase
             $table->string('value', 50)->nullable();
             $table->primary(['a', 'b']);
         });
+    }
+
+    #[Test]
+    public function selectiveUpdatesMatchEveryPartOfTheCompositeKey(): void
+    {
+        DB::table('test_pivot')->insert([
+            ['a' => 'x', 'b' => 'one', 'value' => 'First'],
+            ['a' => 'x', 'b' => 'two', 'value' => 'Second'],
+            ['a' => 'y', 'b' => 'one', 'value' => 'Third'],
+        ]);
+        DB::table('test_pivot_sb')->insert([
+            ['a' => 'x', 'b' => 'one', 'value' => 'Old first'],
+            ['a' => 'x', 'b' => 'two', 'value' => 'Old second'],
+            ['a' => 'y', 'b' => 'one', 'value' => 'Old third'],
+        ]);
+        $table = new SandboxTable(
+            'test_pivot',
+            ['a', 'b'],
+            reset: new SandboxCopyRules(updateColumns: ['value']),
+        );
+
+        $table->resetSandbox(DB::connection());
+
+        $this->assertEquals(
+            DB::table('test_pivot')->orderBy('a')->orderBy('b')->get()->all(),
+            DB::table('test_pivot_sb')->orderBy('a')->orderBy('b')->get()->all(),
+        );
     }
 
     #[Test]

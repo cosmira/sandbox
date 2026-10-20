@@ -134,10 +134,11 @@ final class FluentInterfaceTest extends TestCase
     #[Test]
     public function fluentBuilderExposesItsUserAndSandboxInstance(): void
     {
-        $builder = Sandbox::for(1);
+        $sandbox = new \Cosmira\Sandbox\Sandbox();
+        $builder = $sandbox->for(1);
 
+        $this->assertSame($sandbox, $builder->getSandbox());
         $this->assertSame(1, $builder->getUserId());
-        $this->assertInstanceOf(\Cosmira\Sandbox\Sandbox::class, $builder->getSandbox());
     }
 
     #[Test]
