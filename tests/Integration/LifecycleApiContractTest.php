@@ -303,7 +303,7 @@ final class LifecycleApiContractTest extends TestCase
 
     public static function mixedConnectionOperations(): array
     {
-        return [['open'], ['commit'], ['save'], ['rollback'], ['reset'], ['edit']];
+        return [['open'], ['takeOver'], ['commit'], ['save'], ['rollback'], ['reset'], ['edit']];
     }
 
     #[Test]

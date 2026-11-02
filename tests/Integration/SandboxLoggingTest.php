@@ -12,6 +12,7 @@ use Cosmira\Sandbox\Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
 use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\TestWith;
 
 final class SandboxLoggingTest extends TestCase
 {
@@ -45,7 +46,9 @@ final class SandboxLoggingTest extends TestCase
      * This verifies Log::debug() call is not removed (MethodCallRemoval mutation).
      */
     #[Test]
-    public function openingSandboxExecutesLogging(): void
+    #[TestWith(['open'])]
+    #[TestWith(['takeOver'])]
+    public function openingSandboxExecutesLogging(string $operation): void
     {
         $this->createDatabaseUser(1);
         SandboxStatus::factory()->create([
@@ -60,7 +63,7 @@ final class SandboxLoggingTest extends TestCase
             ->once()
             ->with('Sandbox opened', ['user_id' => 1]);
 
-        $this->sandbox->open(1);
+        $this->sandbox->{$operation}(1);
 
         $status = SandboxStatus::first();
         $this->assertSame(SandboxStatusEnum::Locked, $status->status);
