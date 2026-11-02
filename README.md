@@ -21,7 +21,7 @@ shared configuration.
 ## Installation
 
 ```bash
-composer require cosmira/sandbox:^1.0
+composer require cosmira/sandbox
 php artisan vendor:publish --tag=sandbox-migrations
 php artisan migrate
 ```

@@ -162,7 +162,7 @@ final class SandboxLoggingTest extends TestCase
 
         // User 2 tries to open without force - should fail
         $this->expectException(SandboxException::class);
-        $this->sandbox->open(2, force: false);
+        $this->sandbox->open(2);
     }
 
     /**
@@ -181,7 +181,7 @@ final class SandboxLoggingTest extends TestCase
         ]);
 
         // User 2 opens with force - should succeed
-        $this->sandbox->open('2', force: true);
+        $this->sandbox->takeOver('2');
 
         $status = SandboxStatus::first();
         $this->assertSame('2', $status->user_id);

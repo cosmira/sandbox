@@ -142,17 +142,15 @@ final class FluentInterfaceTest extends TestCase
     }
 
     #[Test]
-    public function fluentBuilderCanApplyAndResetModels(): void
+    public function fluentBuilderCanResetModels(): void
     {
         BuilderResetModelStub::$synced = 0;
         Sandbox::for(1)->open();
 
-        $applyBuilder = Sandbox::for(1)->apply(BuilderResetModelStub::class);
         $resetBuilder = Sandbox::for(1)->reset(BuilderResetModelStub::class);
 
-        $this->assertInstanceOf(SandboxBuilder::class, $applyBuilder);
         $this->assertInstanceOf(SandboxBuilder::class, $resetBuilder);
-        $this->assertSame(2, BuilderResetModelStub::$synced);
+        $this->assertSame(1, BuilderResetModelStub::$synced);
     }
 
     #[Test]
@@ -220,7 +218,7 @@ final class FluentInterfaceTest extends TestCase
         Sandbox::for(1)->open();
 
         // Force open with user 2
-        Sandbox::for(2)->open(force: true);
+        Sandbox::for(2)->takeOver();
 
         $status = SandboxStatus::first();
         $this->assertEquals(SandboxStatusEnum::Locked, $status->status);

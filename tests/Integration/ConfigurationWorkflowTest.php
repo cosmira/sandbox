@@ -104,7 +104,7 @@ final class ConfigurationWorkflowTest extends TestCase
         $middleware = new SandboxMiddleware(models: app(SandboxModelRegistry::class), sandbox: app(Sandbox::class));
 
         app(Sandbox::class)->open($owner);
-        app(Sandbox::class)->resetSandboxData($owner, ConfigurationModelStub::class);
+        app(Sandbox::class)->reset($owner, ConfigurationModelStub::class);
 
         $request = Request::create('/configuration/1', 'PATCH');
         $request->setUserResolver(fn () => $owner);

@@ -119,7 +119,7 @@ final class TestingHelpersTest extends TestCase
         $this->assertSandboxLocked(userId: 1);
 
         // Force open with another user
-        $this->openSandbox(userId: 2, force: true);
+        $this->takeOverSandbox(userId: 2);
         $this->assertSandboxLocked(userId: 2);
     }
 

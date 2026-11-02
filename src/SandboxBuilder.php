@@ -32,9 +32,19 @@ class SandboxBuilder
     /**
      * Open the sandbox for the builder user.
      */
-    public function open(bool $force = false, ?string $note = null): self
+    public function open(?string $note = null): self
     {
-        $this->sandbox->open($this->userId, $force, $note);
+        $this->sandbox->open($this->userId, $note);
+
+        return $this;
+    }
+
+    /**
+     * Take ownership of the existing draft for this user.
+     */
+    public function takeOver(?string $note = null): self
+    {
+        $this->sandbox->takeOver($this->userId, $note);
 
         return $this;
     }
@@ -61,18 +71,6 @@ class SandboxBuilder
     public function save(?string $note = null): void
     {
         $this->sandbox->save($this->userId, $note);
-    }
-
-    /**
-     * Apply active data to the sandbox table for the given model.
-     *
-     * @param class-string<Model>|Model $modelOrClass
-     */
-    public function apply(string|Model $modelOrClass): self
-    {
-        $this->sandbox->reset($this->userId, $modelOrClass);
-
-        return $this;
     }
 
     /**

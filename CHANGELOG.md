@@ -1,5 +1,36 @@
 # Changelog
 
+## 3.0.0 - 2026-11-03
+
+### Changed
+
+- Use `takeOver()` to take ownership without discarding an existing draft.
+  `open()` always respects another user's lock and no longer accepts `force`.
+- `SandboxOpened::$force` reports whether an existing editing lock was overridden.
+- `reset()` is the only API for copying active data into a draft. Removed the
+  `SandboxBuilder::apply()` and `Sandbox::resetSandboxData()` aliases.
+- The installation command follows the current release; `save()` documentation
+  now states that it releases the editing lock while keeping the draft.
+
+### Migration
+
+```php
+// Before
+Sandbox::for($userId)->open(force: true, note: 'Recover abandoned draft');
+Sandbox::for($userId)->apply(Product::class);
+Sandbox::resetSandboxData($userId, $product);
+
+// After
+Sandbox::for($userId)->takeOver(note: 'Recover abandoned draft');
+Sandbox::for($userId)->reset(Product::class);
+Sandbox::reset($userId, $product);
+```
+
+Custom backends implement `open(int|string $userId, ?string $note = null)` and
+`takeOver(int|string $userId, ?string $note = null)`. Backends extending
+`EloquentSandboxBackend` inherit takeover support. Override `takeOver()` when
+an application forbids administrative recovery through this backend.
+
 ## 2.1.0 - 2026-10-20
 
 ### Added

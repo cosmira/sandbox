@@ -142,7 +142,7 @@ final class HasSandboxCompositeKeyTest extends TestCase
         $model->a = 'x';
 
         app(Sandbox::class)->open(1);
-        app(Sandbox::class)->resetSandboxData(1, $model);
+        app(Sandbox::class)->reset(1, $model);
 
         $this->assertSame(1, DB::table('test_pivot_sb')->count());
         $this->assertSame(
@@ -165,7 +165,7 @@ final class HasSandboxCompositeKeyTest extends TestCase
         $model->value = 'stale';
 
         app(Sandbox::class)->open(1);
-        app(Sandbox::class)->resetSandboxData(1, $model);
+        app(Sandbox::class)->reset(1, $model);
 
         $this->assertSame(
             'fresh',

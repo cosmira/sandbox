@@ -142,7 +142,7 @@ final class LifecycleApiContractTest extends TestCase
     {
         $sandbox = app(Sandbox::class);
         $sandbox->open(1);
-        $sandbox->open(2, force: true);
+        $sandbox->takeOver(2);
         $sandbox->rollback(2);
 
         $this->assertTrue($sandbox->status()->isFree());
@@ -156,28 +156,26 @@ final class LifecycleApiContractTest extends TestCase
         $user->setAttribute('id', 7);
         $model = new ApiResetModel();
         $backend = $this->createMock(SandboxBackend::class);
-        $backend->expects($this->exactly(4))->method('reset')->with(7, $model);
+        $backend->expects($this->exactly(2))->method('reset')->with(7, $model);
         $sandbox = new Sandbox(backend: $backend, models: app(SandboxModelRegistry::class));
         $this->app->instance(Sandbox::class, $sandbox);
         SandboxFacade::clearResolvedInstance(Sandbox::class);
 
         SandboxFacade::reset($user, $model);
-        SandboxFacade::resetSandboxData($user, $model);
         SandboxFacade::for(7)->reset($model);
-        SandboxFacade::for(7)->apply($model);
     }
 
     #[Test]
     public function lifecycleApisDelegateToTheBackendWithoutUpdaterOptions(): void
     {
         $backend = $this->createMock(SandboxBackend::class);
-        $backend->expects($this->once())->method('open')->with(7, true, 'Recovery');
+        $backend->expects($this->once())->method('takeOver')->with(7, 'Recovery');
         $backend->expects($this->once())->method('commit')->with(7, 'Commit');
         $backend->expects($this->once())->method('save')->with(7, 'Save');
         $backend->expects($this->once())->method('rollback')->with(7, 'Rollback');
         $sandbox = new Sandbox(backend: $backend, models: app(SandboxModelRegistry::class));
 
-        $sandbox->open(7, true, 'Recovery');
+        $sandbox->takeOver(7, 'Recovery');
         $sandbox->commit(7, 'Commit');
         $sandbox->save(7, 'Save');
         $sandbox->rollback(7, 'Rollback');

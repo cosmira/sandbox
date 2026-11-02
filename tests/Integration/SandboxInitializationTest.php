@@ -108,7 +108,7 @@ final class SandboxInitializationTest extends TestCase
         $sandbox->open(2);
         $this->assertSame('Edited', DB::table('initialization_items_sb')->value('name'));
 
-        $sandbox->open(3, force: true);
+        $sandbox->takeOver(3);
         $this->assertSame('Edited', DB::table('initialization_items_sb')->value('name'));
     }
 

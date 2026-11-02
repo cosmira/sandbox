@@ -99,10 +99,17 @@ class Sandbox
      */
     public function open(
         int|string|Model $user,
-        bool $force = false,
         ?string $note = null,
     ): void {
-        $this->backend->open($this->userId($user), $force, $note);
+        $this->backend->open($this->userId($user), $note);
+    }
+
+    /**
+     * Take ownership of the draft after the application authorizes recovery.
+     */
+    public function takeOver(int|string|Model $user, ?string $note = null): void
+    {
+        $this->backend->takeOver($this->userId($user), $note);
     }
 
     /**
@@ -218,17 +225,5 @@ class Sandbox
     public function reset(int|string|Model $user, string|Model $modelOrClass): void
     {
         $this->backend->reset($this->userId($user), $modelOrClass);
-    }
-
-    /**
-     * Reset sandbox data using an explicitly identified owner.
-     *
-     * @param class-string<Model>|Model $modelOrClass
-     *
-     * @throws SandboxException
-     */
-    public function resetSandboxData(int|string|Model $user, string|Model $modelOrClass): void
-    {
-        $this->reset($user, $modelOrClass);
     }
 }

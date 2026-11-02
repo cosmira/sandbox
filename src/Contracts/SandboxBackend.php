@@ -25,13 +25,17 @@ interface SandboxBackend
     public function edit(int|string $userId, callable $callback): mixed;
 
     /**
-     * The host must authorize force takeover before calling this method.
+     * Open the draft unless another user owns its editing lock.
      */
     public function open(
         int|string $userId,
-        bool $force = false,
         ?string $note = null,
     ): void;
+
+    /**
+     * Take ownership without resetting the draft; the host must authorize recovery.
+     */
+    public function takeOver(int|string $userId, ?string $note = null): void;
 
     /**
      * Publish draft data and release the editing lock.

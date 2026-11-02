@@ -9,15 +9,15 @@ use Cosmira\Sandbox\Sandbox;
 use Cosmira\Sandbox\Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 
-final class SandboxResetApplyTest extends TestCase
+final class SandboxResetTest extends TestCase
 {
     #[Test]
-    public function resetSandboxDataThrowsWhenModelCannotResetSandbox(): void
+    public function resetThrowsWhenModelCannotResetSandbox(): void
     {
         $sandbox = resolve(Sandbox::class);
         $sandbox->open(1);
         $this->expectException(SandboxException::class);
         $this->expectExceptionCode(SandboxException::CODE_MODEL_NOT_REGISTERED);
-        $sandbox->resetSandboxData(1, \stdClass::class);
+        $sandbox->reset(1, \stdClass::class);
     }
 }

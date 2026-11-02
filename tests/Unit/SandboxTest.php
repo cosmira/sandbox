@@ -165,7 +165,7 @@ final class SandboxTest extends TestCase
             'user_id' => 2,
         ]);
 
-        $this->sandbox->open(1, force: true, note: 'Forced open');
+        $this->sandbox->takeOver(1, note: 'Forced open');
 
         Event::assertDispatched(SandboxResetting::class);
         Event::assertDispatched(SandboxOpened::class, function (SandboxOpened $event) {
@@ -189,7 +189,7 @@ final class SandboxTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $this->sandbox->open(1, force: true);
+        $this->sandbox->takeOver(1);
 
         Event::assertNotDispatched(SandboxResetting::class);
         Event::assertNotDispatched(SandboxOpened::class);
@@ -359,7 +359,7 @@ final class SandboxTest extends TestCase
         SandboxStatus::factory()->create(['status' => SandboxStatusEnum::Locked, 'user_id' => 1]);
         $model = new InjectedSandboxModelStub();
 
-        $sandbox->resetSandboxData(1, $model);
+        $sandbox->reset(1, $model);
 
         $this->assertSame([$model], $recordRestorer->restoredModels);
     }
@@ -371,7 +371,7 @@ final class SandboxTest extends TestCase
         $this->expectException(SandboxException::class);
         $this->expectExceptionCode(SandboxException::CODE_MODEL_NOT_REGISTERED);
 
-        $this->sandbox->resetSandboxData(1, NonModelWithSandboxSyncStub::class);
+        $this->sandbox->reset(1, NonModelWithSandboxSyncStub::class);
     }
 
     #[Test]

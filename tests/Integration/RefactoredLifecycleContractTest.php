@@ -6,6 +6,7 @@ namespace Cosmira\Sandbox\Tests\Integration;
 
 use Cosmira\Sandbox\Backends\EloquentSandboxBackend;
 use Cosmira\Sandbox\Enums\SandboxStatus as State;
+use Cosmira\Sandbox\Events\SandboxOpened;
 use Cosmira\Sandbox\Events\SandboxResetting;
 use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\HasSandbox;
@@ -144,11 +145,12 @@ final class RefactoredLifecycleContractTest extends TestCase
     public function forcingAFreeDraftEmitsOnlyOneResetEvent(): void
     {
         SandboxStatus::query()->update(['status' => State::Free, 'user_id' => 2]);
-        Event::fake([SandboxResetting::class]);
+        Event::fake([SandboxResetting::class, SandboxOpened::class]);
 
-        (new EloquentSandboxBackend(new SandboxModelRegistry()))->open(1, true);
+        (new EloquentSandboxBackend(new SandboxModelRegistry()))->takeOver(1);
 
         Event::assertDispatchedTimes(SandboxResetting::class, 1);
+        Event::assertDispatched(SandboxOpened::class, static fn (SandboxOpened $event): bool => ! $event->force);
     }
 }
 

@@ -88,7 +88,7 @@ final class SandboxExceptionHandlingTest extends TestCase
             'user_id' => 1,
         ]);
 
-        $this->sandbox->open(2, force: true);
+        $this->sandbox->takeOver(2);
         $this->sandbox->rollback(2);
 
         $status = SandboxStatus::first();

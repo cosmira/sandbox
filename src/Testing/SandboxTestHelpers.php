@@ -28,7 +28,6 @@ trait SandboxTestHelpers
      */
     protected function openSandbox(
         int|string|null $userId = null,
-        bool $force = false,
         ?string $note = null,
     ): void {
         $resolvedUserId = $userId ?? auth()->guard()->user()?->getAuthIdentifier();
@@ -36,7 +35,20 @@ trait SandboxTestHelpers
             throw new \RuntimeException(self::MISSING_USER);
         }
 
-        Sandbox::for($resolvedUserId)->open($force, $note);
+        Sandbox::for($resolvedUserId)->open($note);
+    }
+
+    /**
+     * Take ownership of the existing draft for the given or authenticated user.
+     */
+    protected function takeOverSandbox(int|string|null $userId = null, ?string $note = null): void
+    {
+        $resolvedUserId = $userId ?? auth()->guard()->user()?->getAuthIdentifier();
+        if (! $resolvedUserId) {
+            throw new \RuntimeException(self::MISSING_USER);
+        }
+
+        Sandbox::for($resolvedUserId)->takeOver($note);
     }
 
     /**

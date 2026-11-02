@@ -158,7 +158,7 @@ class AutoUserDetectionTest extends TestCase
         $this->actingAs($user = $this->createUser(id: 888));
 
         Sandbox::me()
-            ->open(force: true, note: 'Auto-detected user')
+            ->takeOver(note: 'Auto-detected user')
             ->commit(note: 'All fluent');
 
         $this->assertSandboxFree();

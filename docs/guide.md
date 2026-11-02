@@ -335,11 +335,11 @@ Sandbox::for($ownerId)->save(); // keep the draft for later
 For operational recovery, an administrator can force ownership:
 
 ```php
-Sandbox::for($adminId)->open(force: true, note: 'Taking over abandoned draft');
+Sandbox::for($adminId)->takeOver(note: 'Taking over abandoned draft');
 ```
 
-Use `force: true` deliberately.
-It is a recovery tool for abandoned or operator-managed drafts, not the normal collaboration path.
+Authorize `takeOver()` in the host application before calling it.
+It preserves the existing draft and changes its owner.
 
 ## Lifecycle API
 
@@ -363,19 +363,19 @@ Builder methods:
 
 | Method | Description |
 | --- | --- |
-| `open(force: false, note: null)` | Refreshes and locks a free sandbox, or reopens a saved draft |
+| `open(note: null)` | Refreshes and locks a free sandbox, or reopens a saved draft |
 | `commit(note: null)` | Applies sandbox data to active tables |
 | `rollback(note: null)` | Resets sandbox data from active tables |
-| `save(note: null)` | Keeps the draft and keeps the sandbox active |
+| `save(note: null)` | Keeps the draft and releases the editing lock |
 | `reset($modelOrClass)` | Refreshes one model or record from active data |
-| `apply($modelOrClass)` | Alias for `reset()` |
+| `takeOver(note: null)` | Takes ownership without discarding draft changes |
 | `status()` | Returns the current status row |
 
-`force: true` lets an operator take ownership from another user. Use it for
+`takeOver()` lets an operator take ownership from another user. Use it for
 admin recovery flows, not for regular editing. The application must authorize
 this operation before calling it. `commit`, `rollback`, `save` and `reset`
 require a Locked draft owned by the caller. Open a Saved draft first. Rolling
-back someone else's Locked draft requires an explicitly authorized force-open.
+back someone else's Locked draft requires an explicitly authorized takeover.
 Opening an already Locked draft as its owner is a no-op, without another event.
 
 Callback API (facade or injected `Sandbox`):
@@ -386,7 +386,6 @@ Sandbox::read($userId, fn (bool $draft) => Product::query()->get());
 Sandbox::read(null, fn (bool $draft) => Product::query()->get()); // guest: active
 Sandbox::edit($userId, fn () => Product::query()->create($attributes));
 Sandbox::reset($userId, Product::class);
-Sandbox::resetSandboxData($userId, $product); // explicit-owner compatibility alias
 ```
 
 Bind `Cosmira\Sandbox\Contracts\SandboxBackend` to customize the complete

@@ -44,11 +44,14 @@ class OpenSandboxCommand extends Command
             $userId = $user->getAuthIdentifier();
         }
 
-        $force = $this->option('force') === true;
         $note = $this->option('note');
 
         try {
-            $sandbox->open($userId, $force, $note);
+            if ($this->option('force') === true) {
+                $sandbox->takeOver($userId, $note);
+            } else {
+                $sandbox->open($userId, $note);
+            }
             $this->info("Sandbox opened for user: {$userId}");
 
             return self::SUCCESS;

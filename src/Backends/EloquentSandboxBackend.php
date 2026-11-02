@@ -64,53 +64,72 @@ class EloquentSandboxBackend implements SandboxBackend
     }
 
     /**
-     * Open the sandbox for the given user.
-     *
-     *
-     * @throws SandboxException
+     * Open the draft unless another user owns its editing lock.
      */
-    public function open(int|string $userId, bool $force = false, ?string $note = null): void
+    public function open(int|string $userId, ?string $note = null): void
     {
         $this->models->ensureAllConnections($this->connection());
         Log::debug('Opening sandbox', ['user_id' => $userId]);
 
-        $this->connection()->transaction(function () use ($userId, $force, $note): void {
+        $this->connection()->transaction(function () use ($userId, $note): void {
             $status = $this->lockedStatus();
 
-            if (! $force && $status->isLocked() && ! $status->isForUser($userId)) {
+            if ($status->isLocked() && ! $status->isForUser($userId)) {
                 throw new SandboxException(
                     'Sandbox is locked by other user '.$status->user_id,
                     SandboxException::CODE_SANDBOX_LOCKED,
                 );
             }
 
-            if ($status->isLockedBy($userId)) {
-                return;
-            }
-
-            if ($status->isFree()) {
-                Event::dispatch(new SandboxResetting());
-                $this->initializeDraft();
-                Event::dispatch(new SandboxInitialized($this->connection()));
-            }
-            if (! $status->isFree() && $force && ! $status->isForUser($userId)) {
-                Event::dispatch(new SandboxResetting());
-            }
-
-            $this->updateStatusRow($status, [
-                'last_operation' => null,
-                'status'         => SandboxStatusEnum::Locked,
-                'user_id'        => $userId,
-                'note'           => $note,
-                'change_date'    => now(),
-            ]);
-
-            $this->connection()->afterCommit(
-                fn () => Event::dispatch(new SandboxOpened($userId, $force, $note)),
-            );
-
-            Log::info('Sandbox opened', ['user_id' => $userId]);
+            $this->lockDraft($status, $userId, $note);
         });
+    }
+
+    /**
+     * Take ownership of the existing draft without discarding its changes.
+     */
+    public function takeOver(int|string $userId, ?string $note = null): void
+    {
+        $this->models->ensureAllConnections($this->connection());
+        Log::debug('Opening sandbox', ['user_id' => $userId]);
+
+        $this->connection()->transaction(function () use ($userId, $note): void {
+            $this->lockDraft($this->lockedStatus(), $userId, $note);
+        });
+    }
+
+    /**
+     * Prepare a free draft and assign the locked status to its new owner.
+     */
+    private function lockDraft(SandboxStatus $status, int|string $userId, ?string $note): void
+    {
+        if ($status->isLockedBy($userId)) {
+            return;
+        }
+
+        $overridden = $status->isLocked() && ! $status->isForUser($userId);
+
+        if ($status->isFree()) {
+            Event::dispatch(new SandboxResetting());
+            $this->initializeDraft();
+            Event::dispatch(new SandboxInitialized($this->connection()));
+        } elseif ($overridden) {
+            Event::dispatch(new SandboxResetting());
+        }
+
+        $this->updateStatusRow($status, [
+            'last_operation' => null,
+            'status'         => SandboxStatusEnum::Locked,
+            'user_id'        => $userId,
+            'note'           => $note,
+            'change_date'    => now(),
+        ]);
+
+        $this->connection()->afterCommit(
+            fn () => Event::dispatch(new SandboxOpened($userId, $overridden, $note)),
+        );
+
+        Log::info('Sandbox opened', ['user_id' => $userId]);
     }
 
     /**

@@ -571,7 +571,7 @@ final class SyncOperationsTest extends TestCase
     }
 
     #[Test]
-    public function resetSandboxDataSyncsModelClass(): void
+    public function resetSyncsModelClass(): void
     {
         DB::table('items')->insert([
             [
@@ -587,14 +587,14 @@ final class SyncOperationsTest extends TestCase
             'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
             'user_id' => 1,
         ]);
-        app(Sandbox::class)->resetSandboxData(1, SimpleModelStub::class);
+        app(Sandbox::class)->reset(1, SimpleModelStub::class);
 
         $this->assertSame(1, DB::table('items_sb')->count());
         $this->assertSame(100, DB::table('items_sb')->where('id', 1)->value('value'));
     }
 
     #[Test]
-    public function resetSandboxDataRejectsNonModelClasses(): void
+    public function resetRejectsNonModelClasses(): void
     {
         $this->expectException(SandboxException::class);
         $this->expectExceptionCode(SandboxException::CODE_MODEL_NOT_REGISTERED);
@@ -603,11 +603,11 @@ final class SyncOperationsTest extends TestCase
             'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
             'user_id' => 1,
         ]);
-        app(Sandbox::class)->resetSandboxData(1, \stdClass::class);
+        app(Sandbox::class)->reset(1, \stdClass::class);
     }
 
     #[Test]
-    public function resetSandboxDataRejectsModelClassesWithoutSandboxSync(): void
+    public function resetRejectsModelClassesWithoutSandboxSync(): void
     {
         $this->expectException(SandboxException::class);
         $this->expectExceptionCode(SandboxException::CODE_MODEL_NOT_REGISTERED);
@@ -616,11 +616,11 @@ final class SyncOperationsTest extends TestCase
             'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
             'user_id' => 1,
         ]);
-        app(Sandbox::class)->resetSandboxData(1, NonSandboxSyncModelStub::class);
+        app(Sandbox::class)->reset(1, NonSandboxSyncModelStub::class);
     }
 
     #[Test]
-    public function resetSandboxDataRejectsModelInstancesWithoutSandboxTables(): void
+    public function resetRejectsModelInstancesWithoutSandboxTables(): void
     {
         $model = new PartialSandboxSyncModelStub();
         $model->id = 1;
@@ -632,11 +632,11 @@ final class SyncOperationsTest extends TestCase
             'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
             'user_id' => 1,
         ]);
-        app(Sandbox::class)->resetSandboxData(1, $model);
+        app(Sandbox::class)->reset(1, $model);
     }
 
     #[Test]
-    public function resetSandboxDataRejectsModelsWithoutWritableColumnApi(): void
+    public function resetRejectsModelsWithoutWritableColumnApi(): void
     {
         $model = new PartialSandboxTableModelStub();
         $model->id = 1;
@@ -648,11 +648,11 @@ final class SyncOperationsTest extends TestCase
             'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
             'user_id' => 1,
         ]);
-        app(Sandbox::class)->resetSandboxData(1, $model);
+        app(Sandbox::class)->reset(1, $model);
     }
 
     #[Test]
-    public function resetSandboxDataRejectsModelsWithoutActiveTableApi(): void
+    public function resetRejectsModelsWithoutActiveTableApi(): void
     {
         $model = new PartialSandboxRestoreModelWithoutActiveTableStub();
         $model->setAttribute('id', 1);
@@ -664,11 +664,11 @@ final class SyncOperationsTest extends TestCase
             'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
             'user_id' => 1,
         ]);
-        app(Sandbox::class)->resetSandboxData(1, $model);
+        app(Sandbox::class)->reset(1, $model);
     }
 
     #[Test]
-    public function resetSandboxDataInsertsSingleModelRow(): void
+    public function resetInsertsSingleModelRow(): void
     {
         DB::table('items')->insert([
             [
@@ -687,13 +687,13 @@ final class SyncOperationsTest extends TestCase
             'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
             'user_id' => 1,
         ]);
-        app(Sandbox::class)->resetSandboxData(1, $model);
+        app(Sandbox::class)->reset(1, $model);
 
         $this->assertSame(100, DB::table('items_sb')->where('id', 1)->value('value'));
     }
 
     #[Test]
-    public function resetSandboxDataKeepsKeyColumnsWhenWritableColumnsExcludeThem(): void
+    public function resetKeepsKeyColumnsWhenWritableColumnsExcludeThem(): void
     {
         SimpleModelStub::setSyncColumnsWithoutKey();
 
@@ -714,14 +714,14 @@ final class SyncOperationsTest extends TestCase
             'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
             'user_id' => 1,
         ]);
-        app(Sandbox::class)->resetSandboxData(1, $model);
+        app(Sandbox::class)->reset(1, $model);
 
         $this->assertSame(1, DB::table('items_sb')->count());
         $this->assertSame('keyed', DB::table('items_sb')->where('id', 7)->value('name'));
     }
 
     #[Test]
-    public function resetSandboxDataUpdatesSingleModelRow(): void
+    public function resetUpdatesSingleModelRow(): void
     {
         DB::table('items')->insert([
             [
@@ -749,13 +749,13 @@ final class SyncOperationsTest extends TestCase
             'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
             'user_id' => 1,
         ]);
-        app(Sandbox::class)->resetSandboxData(1, $model);
+        app(Sandbox::class)->reset(1, $model);
 
         $this->assertSame(200, DB::table('items_sb')->where('id', 1)->value('value'));
     }
 
     #[Test]
-    public function resetSandboxDataDeletesSingleModelRowWhenActiveRowIsMissing(): void
+    public function resetDeletesSingleModelRowWhenActiveRowIsMissing(): void
     {
         DB::table('items_sb')->insert([
             [
@@ -774,7 +774,7 @@ final class SyncOperationsTest extends TestCase
             'status'  => \Cosmira\Sandbox\Enums\SandboxStatus::Locked,
             'user_id' => 1,
         ]);
-        app(Sandbox::class)->resetSandboxData(1, $model);
+        app(Sandbox::class)->reset(1, $model);
 
         $this->assertFalse(DB::table('items_sb')->where('id', 1)->exists());
         $this->assertSame(0, DB::table('items_sb')->count());
