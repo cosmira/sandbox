@@ -749,7 +749,6 @@ and external integrations.
 
 | Event | Data |
 | --- | --- |
-| `SandboxChanged` | model class and `connection`; synchronous completion of an explicit operation |
 | `SandboxInitialized` | lifecycle `connection`; synchronous preparation of a newly copied draft |
 | `SandboxOpened` | `userId`, `force`, `note`; notification after commit |
 | `SandboxResetting` | dispatched before sandbox data should be reset |
@@ -774,13 +773,14 @@ data and edits. `SandboxOpened` remains an after-commit notification of an actua
 opening transition; it does not run when the current owner opens again. Use it
 for notifications, not preparation required by the edit callback.
 
-### Completing model operations
+### Application transactions
 
-Use `Sandbox::transaction()` to finish a complete model operation, including its
-relationship changes, before subscribers update derived data:
+Use Laravel transactions for application operations that must succeed together:
 
 ```php
-$category = Sandbox::transaction(Category::class, function () use ($attributes, $parentIds) {
+use Illuminate\Support\Facades\DB;
+
+$category = DB::transaction(function () use ($attributes, $parentIds) {
     $category = Category::create($attributes);
     $category->parents()->sync($parentIds);
 
@@ -788,21 +788,14 @@ $category = Sandbox::transaction(Category::class, function () use ($attributes, 
 });
 ```
 
-The declared model must use the sandbox connection; a mismatch is rejected
-before invoking the callback. All writes in the callback must use that same
-connection to participate in rollback. After it returns, `SandboxChanged`
-is dispatched synchronously inside that transaction, before the result is
-returned to the caller. Listeners can inspect `$event->model` to handle their
-module's operations and use `$event->connection` for transactional updates.
-A callback or listener failure rolls back the transaction. Required listeners
-must not be queued or implement `ShouldHandleEventsAfterCommit`.
+Use the same connection as the models. Keep required application work inside the
+callback so an exception rolls back the operation. Application actions own their
+derived data; Sandbox does not dispatch a separate model-completion event.
 
-This method does not open a draft, claim ownership or change table selection.
-Use it within the existing editing scope. Each explicit transaction emits its
-own completion event, including nested calls; changes are not coalesced.
-An enclosing transaction may still roll back after this event, so it is not a
-notification that data has committed. Listeners must not perform operations
-that commit the database transaction implicitly.
+`Sandbox::edit()` opens the owned draft and runs its callback under the backend's
+transaction policy. Routes using the `sandbox` middleware already enter this
+editing scope. A Laravel transaction alone does not open a draft or change table
+selection.
 
 ## Testing
 

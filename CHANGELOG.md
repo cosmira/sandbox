@@ -1,5 +1,21 @@
 # Changelog
 
+## 4.0.0 - 2026-11-03
+
+### Changed
+
+- Use Laravel's `DB::transaction()` for application operations. Removed
+  `Sandbox::transaction()` and the `SandboxChanged` event.
+- Keep application-owned preparation inside the transaction callback. Sandbox
+  continues to own draft selection, editing locks, and its lifecycle events.
+
+### Migration
+
+Replace `Sandbox::transaction(Model::class, $callback)` with a Laravel transaction
+on the models' connection. Move required `SandboxChanged` listeners into the
+application action, before its transaction callback returns. Model refreshes
+needed by HTTP responses belong in the action as well.
+
 ## 3.0.0 - 2026-11-03
 
 ### Changed
