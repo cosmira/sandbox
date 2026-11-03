@@ -6,6 +6,8 @@
 
 - Discover Oracle copy columns in the session's current schema when the login
   owns a different schema. Explicit table owners still take precedence.
+- Copy rows with database-side inserts and updates, preserving binary LOB types
+  instead of rebinding BLOB data as text through PHP.
 
 ## 4.0.0 - 2026-11-03
 

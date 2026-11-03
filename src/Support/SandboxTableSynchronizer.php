@@ -8,7 +8,6 @@ use Cosmira\Sandbox\Exceptions\SandboxException;
 use Cosmira\Sandbox\SandboxCopyRules;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Query\Builder as QueryBuilder;
-use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -29,11 +28,6 @@ class SandboxTableSynchronizer
     {
         $this->connection = $connection ?? DB::connection();
     }
-
-    /**
-     * The number of rows inserted per portable insert batch.
-     */
-    private const INSERT_CHUNK_SIZE = 500;
 
     /**
      * Synchronize source rows into the target table.
@@ -142,7 +136,7 @@ class SandboxTableSynchronizer
                         ));
             })->select($columns);
 
-            $inserted = $this->insertChunked($targetTable, $ready->cursor());
+            $inserted = $this->connection->table($targetTable)->insertUsing($columns, $ready);
             if ($inserted === 0) {
                 throw new SandboxException(
                     'Sandbox tree contains an unresolved parent or a cycle.',
@@ -190,78 +184,21 @@ class SandboxTableSynchronizer
         string $sourceAlias,
         ?SandboxCopyRules $rules,
     ): void {
-        foreach ($this->matchingRows(
-            $targetTable,
-            $sourceTable,
-            $keyColumns,
-            $columns,
-            $targetAlias,
-            $sourceAlias,
-            $rules,
-        ) as $row) {
-            $attributes = (array) $row;
-            $keys = [];
-            $values = $attributes;
-
-            foreach ($keyColumns as $keyColumn) {
-                $keys[$keyColumn] = $attributes[$keyColumn];
-                unset($values[$keyColumn]);
-            }
-
-            if ($values !== []) {
-                $this->connection->table($targetTable)->where($keys)->update($values);
-            }
-        }
-    }
-
-    /**
-     * Read matching rows regardless of timestamp precision or database collation.
-     *
-     * @param array<int, string> $keyColumns
-     * @param array<int, string> $columns
-     *
-     * @return iterable<int, object>
-     */
-    private function matchingRows(
-        string $targetTable,
-        string $sourceTable,
-        array $keyColumns,
-        array $columns,
-        string $targetAlias,
-        string $sourceAlias,
-        ?SandboxCopyRules $rules,
-    ): iterable {
-        $query = $this->connection->table($sourceTable, $sourceAlias)
-            ->join(
-                $targetTable.' as '.$targetAlias,
-                fn (JoinClause $join) => $this->joinOnKeys(
-                    $join,
-                    $keyColumns,
-                    $targetAlias,
-                    $sourceAlias,
-                ),
-            )
-            ->select($this->selectColumns($sourceAlias, $columns));
+        $source = $this->connection->table($sourceTable, $sourceAlias);
+        $this->whereKeysMatch($source, $sourceAlias, $targetAlias, $keyColumns);
         if ($rules?->updates !== null) {
-            ($rules->updates)($query);
+            ($rules->updates)($source);
         }
 
-        return $query->cursor();
-    }
+        $values = [];
+        foreach (array_diff($columns, $keyColumns) as $column) {
+            $values[$column] = (clone $source)->select($sourceAlias.'.'.$column);
+        }
 
-    /**
-     * Add join conditions for the configured sync keys.
-     *
-     * @param array<int, string> $keyColumns
-     */
-    private function joinOnKeys(
-        JoinClause $join,
-        array $keyColumns,
-        string $targetAlias,
-        string $sourceAlias,
-    ): void {
-        foreach ($keyColumns as $col) {
-            $join->on($targetAlias.'.'.$col, '=', $sourceAlias.'.'.$col);
+        if ($values !== []) {
+            $this->connection->table($targetTable, $targetAlias)
+                ->whereExists((clone $source)->selectRaw('1'))
+                ->update($values);
         }
     }
 
@@ -290,34 +227,7 @@ class SandboxTableSynchronizer
             ($rules->inserts)($query);
         }
 
-        $this->insertChunked($targetTable, $query->cursor());
-    }
-
-    /**
-     * Insert rows using portable batches.
-     *
-     * @param iterable<int, object> $rows
-     */
-    private function insertChunked(string $table, iterable $rows): int
-    {
-        $chunk = [];
-        $inserted = 0;
-
-        foreach ($rows as $row) {
-            $chunk[] = (array) $row;
-            $inserted++;
-
-            if (count($chunk) === self::INSERT_CHUNK_SIZE) {
-                $this->connection->table($table)->insert($chunk);
-                $chunk = [];
-            }
-        }
-
-        if ($chunk !== []) {
-            $this->connection->table($table)->insert($chunk);
-        }
-
-        return $inserted;
+        $this->connection->table($targetTable)->insertUsing($columns, $query);
     }
 
     /**
@@ -384,20 +294,5 @@ class SandboxTableSynchronizer
         foreach ($keyColumns as $col) {
             $query->whereColumn($leftTable.'.'.$col, $rightTable.'.'.$col);
         }
-    }
-
-    /**
-     * Qualify source columns and keep stable output names.
-     *
-     * @param array<int, string> $columns
-     *
-     * @return array<int, string>
-     */
-    private function selectColumns(string $table, array $columns): array
-    {
-        return array_map(
-            fn (string $col): string => $table.'.'.$col.' as '.$col,
-            $columns,
-        );
     }
 }

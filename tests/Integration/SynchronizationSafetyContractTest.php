@@ -160,7 +160,7 @@ final class SynchronizationSafetyContractTest extends TestCase
     }
 
     #[Test]
-    public function eachMatchedRowIsUpdatedOnceWithoutCrossJoiningOtherKeys(): void
+    public function matchedRowsAreCopiedWithoutPerRowUpdates(): void
     {
         DB::table('sync_contract')->insert([
             ['id' => 1, 'value' => 'one'], ['id' => 2, 'value' => 'two'], ['id' => 3, 'value' => 'three'],
@@ -174,7 +174,7 @@ final class SynchronizationSafetyContractTest extends TestCase
         try {
             $this->sync(null);
             $updates = array_filter($connection->getQueryLog(), fn (array $query): bool => str_starts_with(strtolower($query['query']), 'update '));
-            $this->assertCount(2, $updates, 'Matched rows must not be repeatedly updated by a Cartesian join.');
+            $this->assertCount(1, $updates, 'Copy matched rows in one statement.');
             $this->assertSame(['one', 'two', 'three'], DB::table('sync_contract_sb')->orderBy('id')->pluck('value')->all());
         } finally {
             $connection->disableQueryLog();
@@ -183,7 +183,7 @@ final class SynchronizationSafetyContractTest extends TestCase
     }
 
     #[Test]
-    public function insertionUsesBoundedBatchesAndKeepsTheLastPartialBatch(): void
+    public function missingRowsAreCopiedWithoutPerRowInserts(): void
     {
         $rows = array_map(fn (int $id): array => ['id' => $id, 'value' => 'row '.$id], range(1, 501));
         foreach (array_chunk($rows, 250) as $chunk) {
@@ -195,9 +195,33 @@ final class SynchronizationSafetyContractTest extends TestCase
         try {
             $this->sync(null);
             $inserts = array_filter($connection->getQueryLog(), fn (array $query): bool => str_starts_with(strtolower($query['query']), 'insert '));
-            $this->assertCount(2, $inserts, 'The portable 500-row batch must not become one insert per row.');
+            $this->assertCount(1, $inserts, 'Copy missing rows in one statement.');
             $this->assertSame(501, DB::table('sync_contract_sb')->count());
             $this->assertSame('row 501', DB::table('sync_contract_sb')->where('id', 501)->value('value'));
+        } finally {
+            $connection->disableQueryLog();
+            $connection->flushQueryLog();
+        }
+    }
+
+    #[Test]
+    public function binaryCopiesStayInTheDatabaseForUpdatesAndInserts(): void
+    {
+        $payload = str_repeat("\x00\xffbinary", 1024);
+        DB::table('sync_contract')->insert([
+            ['id' => 1, 'value' => $payload], ['id' => 2, 'value' => $payload],
+        ]);
+        DB::table('sync_contract_sb')->insert(['id' => 1, 'value' => 'old']);
+        $connection = DB::connection();
+        $connection->enableQueryLog();
+
+        try {
+            $this->sync(null);
+            $queries = $connection->getQueryLog();
+            $this->assertSame([$payload, $payload], DB::table('sync_contract_sb')->orderBy('id')->pluck('value')->all());
+            foreach ($queries as $query) {
+                $this->assertFalse(in_array($payload, $query['bindings'], true), 'Copy binary columns without rebinding them.');
+            }
         } finally {
             $connection->disableQueryLog();
             $connection->flushQueryLog();
