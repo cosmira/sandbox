@@ -93,6 +93,7 @@ final class TreeTableContractTest extends TestCase
         DB::table('tree_nodes')->insert(['id' => 1, 'parent_id' => null, 'name' => 'First']);
         DB::table('tree_nodes')->insert(['id' => 2, 'parent_id' => 1, 'name' => 'Second']);
         DB::table('tree_nodes')->where('id', 1)->update(['parent_id' => 2]);
+        DB::table('tree_nodes')->insert(['id' => 4, 'parent_id' => null, 'name' => 'Valid root']);
         DB::table('tree_nodes_sb')->insert(['id' => 3, 'parent_id' => null, 'name' => 'Old draft']);
 
         try {

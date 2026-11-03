@@ -82,7 +82,7 @@ class SandboxTableSynchronizer
             if ($updateColumns !== []) {
                 $this->updateExisting(
                     $targetTable, $sourceTable, $keyColumns,
-                    array_values(array_unique([...$keyColumns, ...$updateColumns])),
+                    $updateColumns,
                     $targetAlias, $sourceAlias, $rules,
                 );
             }
@@ -197,7 +197,7 @@ class SandboxTableSynchronizer
 
         if ($values !== []) {
             $this->connection->table($targetTable, $targetAlias)
-                ->whereExists((clone $source)->selectRaw('1'))
+                ->whereExists($source->selectRaw('1'))
                 ->update($values);
         }
     }

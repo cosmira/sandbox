@@ -49,6 +49,19 @@ final class SyncOperationsTest extends TestCase
     }
 
     #[Test]
+    public function copyingValuesDoesNotWritePrimaryKeyColumns(): void
+    {
+        DB::table('items')->insert(['id' => 1, 'name' => 'Updated']);
+        DB::table('items_sb')->insert(['id' => 1, 'name' => 'Original']);
+        DB::unprepared("CREATE TRIGGER immutable_item_key BEFORE UPDATE OF id ON items_sb
+            BEGIN SELECT RAISE(ABORT, 'Primary keys are immutable'); END");
+
+        SimpleModelStub::resetSandbox();
+
+        $this->assertSame('Updated', DB::table('items_sb')->where('id', 1)->value('name'));
+    }
+
+    #[Test]
     #[DataProvider('syncDirections')]
     public function timestampFreeModelsSynchronizeWithoutATrackingOverride(
         string $operation,
