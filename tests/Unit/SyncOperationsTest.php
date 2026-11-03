@@ -11,6 +11,7 @@ use Cosmira\Sandbox\Sandbox;
 use Cosmira\Sandbox\Support\SandboxTableSynchronizer;
 use Cosmira\Sandbox\Tests\TestCase;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Schema\Builder;
 use Illuminate\Support\Facades\DB;
@@ -53,8 +54,12 @@ final class SyncOperationsTest extends TestCase
     {
         DB::table('items')->insert(['id' => 1, 'name' => 'Updated']);
         DB::table('items_sb')->insert(['id' => 1, 'name' => 'Original']);
-        DB::unprepared("CREATE TRIGGER immutable_item_key BEFORE UPDATE OF id ON items_sb
-            BEGIN SELECT RAISE(ABORT, 'Primary keys are immutable'); END");
+        $key = preg_quote(DB::connection()->getQueryGrammar()->wrap('id'), '/');
+        DB::listen(function (QueryExecuted $query) use ($key): void {
+            if (str_starts_with(strtolower($query->sql), 'update ')) {
+                $this->assertDoesNotMatchRegularExpression('/(?:\\bset|,)\\s*'.$key.'\\s*=/i', $query->sql);
+            }
+        });
 
         SimpleModelStub::resetSandbox();
 
