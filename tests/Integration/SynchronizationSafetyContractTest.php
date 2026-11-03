@@ -207,20 +207,35 @@ final class SynchronizationSafetyContractTest extends TestCase
     #[Test]
     public function binaryCopiesStayInTheDatabaseForUpdatesAndInserts(): void
     {
+        foreach (['sync_contract', 'sync_contract_sb'] as $table) {
+            Schema::table($table, fn (Blueprint $blueprint) => $blueprint->binary('payload')->nullable());
+        }
         $payload = str_repeat("\x00\xffbinary", 1024);
-        DB::table('sync_contract')->insert([
-            ['id' => 1, 'value' => $payload], ['id' => 2, 'value' => $payload],
-        ]);
+        foreach ([1, 2] as $id) {
+            $stream = fopen('php://memory', 'w+');
+            $this->assertIsResource($stream);
+            fwrite($stream, $payload);
+            rewind($stream);
+            DB::table('sync_contract')->insert(['id' => $id, 'payload' => $stream]);
+            fclose($stream);
+        }
         DB::table('sync_contract_sb')->insert(['id' => 1, 'value' => 'old']);
         $connection = DB::connection();
         $connection->enableQueryLog();
 
         try {
-            $this->sync(null);
+            (new SandboxTableSynchronizer($connection))->sync(
+                'sync_contract', 'sync_contract_sb', ['id'], ['id', 'payload'], null,
+            );
             $queries = $connection->getQueryLog();
-            $this->assertSame([$payload, $payload], DB::table('sync_contract_sb')->orderBy('id')->pluck('value')->all());
+            $values = DB::table('sync_contract_sb')->orderBy('id')->pluck('payload')->map(
+                fn ($value) => is_resource($value) ? stream_get_contents($value) : $value,
+            )->all();
+            $this->assertSame([$payload, $payload], $values);
             foreach ($queries as $query) {
-                $this->assertFalse(in_array($payload, $query['bindings'], true), 'Copy binary columns without rebinding them.');
+                foreach ($query['bindings'] as $binding) {
+                    $this->assertFalse(is_resource($binding) || $binding === $payload, 'Keep binary data in the database.');
+                }
             }
         } finally {
             $connection->disableQueryLog();
