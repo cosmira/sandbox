@@ -1,5 +1,12 @@
 # Changelog
 
+## 4.0.1 - 2026-11-03
+
+### Fixed
+
+- Discover Oracle copy columns in the session's current schema when the login
+  owns a different schema. Explicit table owners still take precedence.
+
 ## 4.0.0 - 2026-11-03
 
 ### Changed

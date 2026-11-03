@@ -20,13 +20,16 @@ final class SandboxColumns
     {
         $connection = $schema->getConnection();
         if ($connection->getDriverName() === 'oracle') {
-            [$owner, $tableName] = $schema->parseSchemaAndTable($table);
+            [$owner, $tableName] = str_contains($table, '.')
+                ? explode('.', $table, 2)
+                : [null, $table];
             $columns = $connection->selectFromWriteConnection(
                 'select lower(column_name) as name from all_tab_cols '
-                .'where owner = ? and table_name = ? '
+                ."where owner = coalesce(upper(?), sys_context('USERENV', 'CURRENT_SCHEMA')) "
+                .'and table_name = ? '
                 ."and hidden_column = 'NO' and virtual_column = 'NO' order by column_id",
                 [
-                    strtoupper($owner ?? $connection->getConfig('username')),
+                    $owner,
                     strtoupper($connection->getTablePrefix().$tableName),
                 ],
             );

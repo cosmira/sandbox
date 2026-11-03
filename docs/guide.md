@@ -56,6 +56,10 @@ host application's installation. Keyless model updates require a transaction;
 `status()`, `fresh()` and `refresh()` also reject an invalid singleton.
 The default remains the package's keyed status schema (`id`).
 
+On Oracle, unqualified tables use the session's `CURRENT_SCHEMA` for column
+metadata. A qualified name such as `inventory.categories` uses its explicit
+owner. The connection login does not need to own the configuration tables.
+
 Each sandboxed model needs an active table and a sandbox table. By default the
 sandbox table is the active table name plus `_sb`.
 
